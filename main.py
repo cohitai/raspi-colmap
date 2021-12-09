@@ -7,6 +7,11 @@ import sys
 import glob
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+from itertools import combinations, product
+import math
+
+
 
 
 # create logger
@@ -92,7 +97,8 @@ class MaskAzure:
 
         return blob2crop_dictionary
 
-    def crop_session(self, blob2crop):
+    @staticmethod
+    def crop_session(blob2crop):
         """computes crop parameters for blobs in blob2crop """
 
         def _compute_diffs(im1, im2, im3):
@@ -156,8 +162,7 @@ class MaskAzure:
 
             # safety interval to be added
             means_array_safe = 100 if axis == 0 else 150
-            crop_interval = (
-            max(0, right[ind_max] - means_array_safe), min(len(means_array_mod), left[ind_max] + means_array_safe))
+            crop_interval = (max(0, right[ind_max] - means_array_safe), min(len(means_array_mod), left[ind_max] + means_array_safe))
 
             return crop_interval
 
@@ -184,6 +189,102 @@ class MaskAzure:
 
         return result_dict
 
+    def crop_all_and_plot(self, apply_mask=False, save_to_local=False, rescale=False, plot=True):
+
+        def _pad(img, h, w):
+            #  in case when you have odd number
+            top_pad = int(np.floor((h - img.shape[0]) / 2))
+            bottom_pad = int(np.ceil((h - img.shape[0]) / 2))
+            right_pad = int(np.ceil((w - img.shape[1]) / 2))
+            left_pad = int(np.floor((w - img.shape[1]) / 2))
+            return np.copy(np.pad(img, ((top_pad, bottom_pad), (left_pad, right_pad), (0, 0)), mode='constant',
+                                  constant_values=255))
+
+        def _mask_function(img_path, hlc, hrc, vlc, vrc):
+
+            def _erode_function(img, mask, ker, ite):
+                kernel = np.ones((ker, ker), np.uint8)
+                mask_erosion = cv2.erode(mask, kernel, iterations=ite)
+                imask_erosion = mask_erosion == 0
+                g_img = np.zeros_like(img, np.uint8)
+                g_img.fill(255)
+                g_img[imask_erosion] = img[imask_erosion]
+
+                return g_img, mask_erosion, img
+
+            def _dilate_function(img, mask, ker, ite):
+                kernel = np.ones((ker, ker), np.uint8)
+                mask_dilate = cv2.dilate(mask, kernel, iterations=ite)
+                imask_dilate = mask_dilate == 0
+                g_img = np.zeros_like(img, np.uint8)
+                g_img.fill(255)
+                g_img[imask_dilate] = img[imask_dilate]
+
+                return g_img, mask_dilate, img
+
+            img = cv2.imread(img_path)[vlc:vrc, hlc:hrc]  # cv2 read & crop
+            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # convert to hsv
+            mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))  # mask by slicing the green spectrum
+            # apply the masking:
+            g_img = np.zeros_like(img, np.uint8)
+            mask_g = np.zeros_like(img, np.uint8)
+            g_img.fill(255)
+            g_img[mask > 0] = img[mask > 0]
+
+            mask_g[~mask > 0] = img[~mask > 0]
+            mask_g[mask_g != 0] = 255
+            # erosion and dilation
+            g_img, mask, img = _dilate_function(img, mask_g, 3, 5)
+            g_img, mask, img = _erode_function(img, mask, 6, 20)
+            return g_img, mask, img
+
+        container_list = sorted(glob.glob(self.local_dir + "/*"))
+
+        for container_path in container_list:
+
+            d = self.organize_container(container_path);
+            # N = int(math.ceil(math.sqrt(len([item for sublist in list(d.values()) for item in sublist]))))
+            N = int(math.ceil(len([item for sublist in list(d.values()) for item in sublist])) / 4)
+            M = 4
+            # N = math.ceil(len(list(d.values()))/4)
+            dict_w_crop = self.crop_session(d);
+
+            if plot:
+                fig, axs = plt.subplots(nrows=N, ncols=M, figsize=(20, 20));
+                fig.suptitle(f'cropping results {container_path}', fontsize=20, y=1);
+                # fig.tight_layout();
+
+            for i, j in product(range(N), range(M)):
+
+                try:
+                    img_path, crop = dict_w_crop.popitem();
+                    hlc, hrc, vlc, vrc = crop;
+                except KeyError:
+                    continue
+
+                # apply mask: Green HSV,dilate,erode
+                if apply_mask:
+                    img, _, _ = _mask_function(img_path, hlc, hrc, vlc, vrc)
+                else:
+                    img = cv2.imread(img_path)[vlc:vrc, hlc:hrc]
+
+                # rescaling image to WxH by padding
+                if rescale:
+                    img = _pad(img, h=480, w=640)
+
+                # plotting
+                if plot:
+                    axs[i, j].set_title(img_path.split("/")[-1]);
+                    axs[i, j].imshow(img);
+
+                # save to directory
+                if save_to_local:
+
+                    if not os.path.exists(self.target_dir + "/" + img_path.split("/")[-2]): os.makedirs(
+                        self.target_dir + "/" + img_path.split("/")[-2])
+
+                    cv2.imwrite(self.target_dir + "/" + img_path.split("/")[-2] + "/" + img_path.split("/")[-1], img)
+
 
 
 
@@ -195,4 +296,5 @@ class MaskAzure:
 #MaskAzure().delete()
 d = MaskAzure().organize_container("/home/liteandfog/raspi-colmap/d1/1639055186-836341")
 print(MaskAzure().crop_session(d))
-
+MaskAzure().crop_all_and_plot(apply_mask=True,rescale=True ,save_to_local=True, plot=False)
+#plt.show()
