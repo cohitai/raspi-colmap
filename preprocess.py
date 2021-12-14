@@ -1,6 +1,6 @@
 import os
 import shutil
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 from datetime import datetime
 import logging
 import sys
@@ -8,10 +8,8 @@ import glob
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from itertools import combinations, product
+from itertools import product
 import math
-
-
 
 
 # create logger
@@ -28,24 +26,27 @@ blob_service_client = BlobServiceClient.from_connection_string(connect_str)
 
 class MaskAzure:
 
+    # directory to store raw containers
     local_dir = './d1'
+    # directory to store containers after cropping
     target_dir = './d2'
 
     # def __init__(self):
+        #self.local_dir =
 
     def init(self):
+        """method for creating new directories for data"""
         if not os.path.exists(self.target_dir): os.makedirs(self.target_dir)
         if not os.path.exists(self.local_dir): os.makedirs(self.local_dir)
 
     def delete(self):
+        """method for deleting local directories for data"""
         shutil.rmtree(self.local_dir)  # delete directory d1
         shutil.rmtree(self.target_dir)  # delete directory d2
 
     @staticmethod
     def retrieve_last_k_containers(k):
-
-        """function retrieves last k containers from Azure Blobs Storage"""
-
+        """function retrieves last k containers from Azure Blobs Storage."""
         container_list = []
         for i, item in enumerate(reversed(list(blob_service_client.list_containers()))):
             if i == k:
@@ -56,10 +57,10 @@ class MaskAzure:
         return container_list
 
     def dl_blobs_to_local(self, container_list):
+        """method downloads containers from [container_list] to local."""
 
         def _save_blob(blob_name, container_path, client):
-
-            """function downloads and saves a single blob"""
+            """auxiliary function: downloads <blob_name> and saves at <container_path>."""
 
             with open(container_path + "/" + str(blob_name), "wb") as my_blob:
                 blob_client = client.get_blob_client(blob_name)  # Instantiate a new BlobClient
@@ -79,9 +80,9 @@ class MaskAzure:
 
     @staticmethod
     def organize_container(container_path):
-
-        """ :recieves: containers path,
-        :returns: dictionary, keys are camerasIds, values are path_to_image´s. """
+        """ function creates a dictionary which describes the container structure.
+        :param: containers path.
+        :returns: a sorted dictionary, keys are camerasIds, values are path_to_image´s. """
 
         files = [file.split("/")[-1] for file in glob.glob(container_path + "/*")]
         cameras = list(set([file[0:2] for file in files]))
@@ -99,43 +100,47 @@ class MaskAzure:
 
     @staticmethod
     def crop_session(blob2crop):
-        """computes crop parameters for blobs in blob2crop """
+        """computes crop parameters for blobs in blob2crop.
+           :param: blob2crop a dictionary resulted from organize_container (giving info on container and blobs); """
 
         def _compute_diffs(im1, im2, im3):
+            """auxiliary function to subtract images using opencv."""
+
             return [cv2.subtract(im2, im1), cv2.subtract(im3, im2)]
 
         def _find_crop_indices(img_diff, axis=0):
+            """auxiliary function to compute crop indices by detecting moving objects in the frames"""
 
             def _derivative(series, interval=1):
-                """derivative auxiliary"""
+                """derivative of a numpy array"""
                 diff = list()
                 for i in range(len(series)):
                     value = series[i] - series[i - interval]
                     diff.append(value)
                 return np.array(diff)
 
-            def _find_turning_pts(np_array, interval):
-                """function searches for left/right turning/jumping points in <means_array>,
-                    :param:
-                    interval is an integer, representing a sequel of zeros which comes before/after the suspected
-                    point"""
+            def _find_turning_pts(np_array, nz):
+                """auxiliary function searches for left/right turning/jumping points in <means_array>,
+                   :param: np_array,
+                           nz, an integer, representing a sequel of zeros which should come before/after the suspected
+                           point."""
                 left_turn = []
                 right_turn = []
 
-                for t in range(interval, len(np_array)):
+                for t in range(nz, len(np_array)):
                     if np_array[t] != 0:
-                        for j in range(1, interval + 1):
+                        for j in range(1, nz + 1):
                             if np_array[t - j] != 0:
                                 break
-                        if j == interval:
+                        if j == nz:
                             left_turn.append(t)
 
-                for t in range(0, len(np_array) - interval):
+                for t in range(0, len(np_array) - nz):
                     if np_array[t] != 0:
-                        for j in range(1, interval + 1):
+                        for j in range(1, nz + 1):
                             if np_array[t + j] != 0:
                                 break
-                        if j == interval:
+                        if j == nz:
                             right_turn.append(t)
 
                 return [0] + left_turn + [len(np_array)], [0] + right_turn + [len(np_array)]
@@ -170,7 +175,7 @@ class MaskAzure:
         result_dict = {}
 
         for cam in cameras:
-            grey = [cv2.cvtColor(cv2.imread(img), cv2.COLOR_BGR2GRAY) for img in d[cam]]
+            grey = [cv2.cvtColor(cv2.imread(img), cv2.COLOR_BGR2GRAY) for img in blob2crop[cam]]
             img_inds = [x for x in range(len(grey))]
 
             for ind in img_inds:
@@ -185,7 +190,7 @@ class MaskAzure:
                 hlc, hrc = min(hl1, hl2), max(hr1, hr2)
                 vlc, vrc = min(vl1, vl2), max(vr1, vr2)
 
-                result_dict[d[cam][ind]] = (hlc, hrc, vlc, vrc)
+                result_dict[blob2crop[cam][ind]] = (hlc, hrc, vlc, vrc)
 
         return result_dict
 
@@ -222,17 +227,19 @@ class MaskAzure:
 
                 return g_img, mask_dilate, img
 
+            # mask by slicing the green spectrum
             img = cv2.imread(img_path)[vlc:vrc, hlc:hrc]  # cv2 read & crop
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # convert to hsv
-            mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))  # mask by slicing the green spectrum
+            mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))
+
             # apply the masking:
             g_img = np.zeros_like(img, np.uint8)
             mask_g = np.zeros_like(img, np.uint8)
             g_img.fill(255)
             g_img[mask > 0] = img[mask > 0]
-
             mask_g[~mask > 0] = img[~mask > 0]
             mask_g[mask_g != 0] = 255
+
             # erosion and dilation
             g_img, mask, img = _dilate_function(img, mask_g, 3, 5)
             g_img, mask, img = _erode_function(img, mask, 6, 20)
@@ -286,15 +293,11 @@ class MaskAzure:
                     cv2.imwrite(self.target_dir + "/" + img_path.split("/")[-2] + "/" + img_path.split("/")[-1], img)
 
 
-
-
-
-
 #MaskAzure().init()
+#MaskAzure().delete()
 #containers = MaskAzure().retrieve_last_k_containers(1)
 #MaskAzure().dl_blobs_to_local(containers)
-#MaskAzure().delete()
-d = MaskAzure().organize_container("/home/liteandfog/raspi-colmap/d1/1639055186-836341")
-print(MaskAzure().crop_session(d))
-MaskAzure().crop_all_and_plot(apply_mask=True,rescale=True ,save_to_local=True, plot=False)
+#d = MaskAzure().organize_container("/home/liteandfog/raspi-colmap/d1/1639474620-783861")
+#print(MaskAzure().crop_session(d))
+MaskAzure().crop_all_and_plot(apply_mask=True, rescale=True, save_to_local=True, plot=False)
 #plt.show()
