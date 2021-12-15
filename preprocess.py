@@ -31,9 +31,6 @@ class MaskAzure:
     # directory to store containers after cropping
     target_dir = './d2'
 
-    # def __init__(self):
-        #self.local_dir =
-
     def init(self):
         """method for creating new directories for data"""
         if not os.path.exists(self.target_dir): os.makedirs(self.target_dir)
@@ -277,7 +274,7 @@ class MaskAzure:
 
                 # rescaling image to WxH by padding
                 if rescale:
-                    img = _pad(img, h=480, w=640)
+                    img = _pad(img, h=720, w=1080)
 
                 # plotting
                 if plot:
@@ -293,11 +290,13 @@ class MaskAzure:
                     cv2.imwrite(self.target_dir + "/" + img_path.split("/")[-2] + "/" + img_path.split("/")[-1], img)
 
 
-#MaskAzure().init()
 #MaskAzure().delete()
+#MaskAzure().init()
 #containers = MaskAzure().retrieve_last_k_containers(1)
 #MaskAzure().dl_blobs_to_local(containers)
-#d = MaskAzure().organize_container("/home/liteandfog/raspi-colmap/d1/1639474620-783861")
+
+#d = MaskAzure().organize_container("/home/liteandfog/raspi-colmap/d1/1639489210-673626")
 #print(MaskAzure().crop_session(d))
+
 MaskAzure().crop_all_and_plot(apply_mask=True, rescale=True, save_to_local=True, plot=False)
 #plt.show()
