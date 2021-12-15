@@ -7,7 +7,6 @@ from pathlib import Path
 
 
 class DockerizedColmap:
-
     # container's inner directory structure.
     DATASET_PATH = "/root/data"
     DATABASE_PATH = "/root/data/output/database.db"
@@ -18,7 +17,7 @@ class DockerizedColmap:
     DENSE_PATH = "/root/data/output"
     DENSE_PLY_PATH = "/root/data/output/dense.ply"
 
-    def __init__(self, local_dir, masked_dir, output_dir, outliers=False, poisson=False):
+    def __init__(self, local_dir, masked_dir, output_dir):
 
         self.local_dir = local_dir
         self.masked_dir = masked_dir
@@ -26,13 +25,13 @@ class DockerizedColmap:
         self.input_dense = output_dir + '/dense.ply'
         self.output_inlier_cloud = output_dir + '/dense_inlier.ply'
         self.output_poisson = output_dir + '/poisson.ply'
-        self.outliers = outliers #boolean
-        self.poisson = poisson #boolean
 
         if not os.path.exists(self.output_dir): os.makedirs(self.output_dir)
 
-    def reconstruct(self):
-        """ COLMAP in docker"""
+    def reconstruct(self, outliers=False, poisson=False):
+        """ COLMAP in docker
+           :params: boolean; outliers, adds the outliers feature,
+                    boolean; poisson, adds Poisson meshing. """
 
         client = docker.from_env()  # connect to docker daemon
 
@@ -72,15 +71,16 @@ class DockerizedColmap:
         self._run_colmap(client, colmap_cmds, mount_dict, self.DATASET_PATH)
 
         """outliers removal"""
-        if self.outliers:
+        if outliers:
             pcd = o3d.io.read_point_cloud(self.input_dense)
             inlier_cloud, outlier_cloud = self._remove_outliers(pcd, self._create_outliers_list(pcd))
-            logging.info(f"number of points removed by knn:{len(pcd.points)-len(inlier_cloud.points)}")
+            logging.info(f"number of points removed by knn:{len(pcd.points) - len(inlier_cloud.points)}")
             #  save to file
-            o3d.io.write_point_cloud(self.output_inlier_cloud, inlier_cloud, write_ascii=True, compressed=False, print_progress=False)
+            o3d.io.write_point_cloud(self.output_inlier_cloud, inlier_cloud, write_ascii=True, compressed=False,
+                                     print_progress=False)
 
         """poisson meshing"""
-        if self.poisson:
+        if poisson:
             pcd = o3d.io.read_point_cloud(self.output_inlier_cloud) if Path(self.output_inlier_cloud).is_file() \
                 else o3d.io.read_point_cloud(self.input_dense)
             poisson_mesh = self.poisson_reconstruction(pcd)
@@ -92,7 +92,7 @@ class DockerizedColmap:
 
         def _execute_colmap_command(cl, cmd, mount_dict, wd, container_name='colmap:test'):
             return cl.containers.run(container_name, cmd, volumes=mount_dict, working_dir=wd, runtime="nvidia",
-                                 detach=False, auto_remove=True)
+                                     detach=False, auto_remove=True)
 
         for colmap_command, command in cmd_dict.items():
             logging.info(f"executing colmap: {colmap_command}")
@@ -113,4 +113,6 @@ class DockerizedColmap:
 
     @staticmethod
     def poisson_reconstruction(pcd):
-        return o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=12, width=0, scale=1.1, linear_fit=False)[0]
+        return o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd,
+                                                                         depth=12, width=0, scale=1.1,
+                                                                         linear_fit=False)[0]

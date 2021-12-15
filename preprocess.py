@@ -3,7 +3,6 @@ import shutil
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 from datetime import datetime
 import logging
-import sys
 import glob
 import numpy as np
 import cv2
@@ -11,41 +10,52 @@ import matplotlib.pyplot as plt
 from itertools import product
 import math
 
-
 # create logger
-logging.getLogger('raspi-colmap')
-logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
+# logging.getLogger('raspi-colmap')
+# logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
 
 # Azure connecting info. added as environment variable
 
-os.environ['AZURE_STORAGE_CONNECTION_STRING'] = 'DefaultEndpointsProtocol=https;AccountName=blobsdb;AccountKey=tJK43kihAcaeZMjcegWFcyg8tsFmOr9f2Kn8q6NUinVSJW5O3jymYbjaiGBjmx8Ibq5LsBVPcABvYeV+tUCPnQ==;EndpointSuffix=core.windows.net'
-connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+os.environ['AZURE_STORAGE_CONNECTION_STRING_1'] = 'DefaultEndpointsProtocol=https;AccountName=blobsdb;AccountKey=tJK43kihAcaeZMjcegWFcyg8tsFmOr9f2Kn8q6NUinVSJW5O3jymYbjaiGBjmx8Ibq5LsBVPcABvYeV+tUCPnQ==;EndpointSuffix=core.windows.net'
+connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_1')
 # Create the BlobServiceClient object which will be used to create a container client.
-blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+blob_service_client_1 = BlobServiceClient.from_connection_string(connect_str)
+
+os.environ['AZURE_STORAGE_CONNECTION_STRING_2'] = 'DefaultEndpointsProtocol=https;AccountName=pointclouds1;AccountKey=2+G3qwZZXh13ShcSpoUHxFxj6i/3YYTurFibVeKoVBI6HrwdOHwc2sgEQydY5VTzSwavVRiFrL5Uf5MQSF4oFA==;EndpointSuffix=core.windows.net'
+connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_2')
+# Create the BlobServiceClient object which will be used to create a container client.
+blob_service_client_2 = BlobServiceClient.from_connection_string(connect_str)
 
 
 class MaskAzure:
 
-    # directory to store raw containers
-    local_dir = './d1'
-    # directory to store containers after cropping
-    target_dir = './d2'
+    def __init__(self, local_dir, target_dir):
+        # directory to store raw containers
+        self.local_dir = local_dir
+        # directory to store containers after cropping
+        self.target_dir = target_dir
 
     def init(self):
-        """method for creating new directories for data"""
-        if not os.path.exists(self.target_dir): os.makedirs(self.target_dir)
-        if not os.path.exists(self.local_dir): os.makedirs(self.local_dir)
+        """method for initializing the workspace"""
+        if os.path.exists(self.local_dir):
+            shutil.rmtree(self.local_dir)
+        os.makedirs(self.local_dir)
 
-    def delete(self):
-        """method for deleting local directories for data"""
-        shutil.rmtree(self.local_dir)  # delete directory d1
-        shutil.rmtree(self.target_dir)  # delete directory d2
+        if os.path.exists(self.target_dir):
+            shutil.rmtree(self.target_dir)
+        os.makedirs(self.target_dir)
+
+    def fetch_last_container(self):
+        """method to download last container """
+
+        container = self.retrieve_last_k_containers(1)
+        self.dl_blobs_to_local(container)
 
     @staticmethod
     def retrieve_last_k_containers(k):
         """function retrieves last k containers from Azure Blobs Storage."""
         container_list = []
-        for i, item in enumerate(reversed(list(blob_service_client.list_containers()))):
+        for i, item in enumerate(reversed(list(blob_service_client_1.list_containers()))):
             if i == k:
                 break
             timestamp = datetime.fromtimestamp(int(item["name"].split("-")[0]))
@@ -71,7 +81,7 @@ class MaskAzure:
             except FileExistsError:
                 continue
 
-            container_client = blob_service_client.get_container_client(container)
+            container_client = blob_service_client_1.get_container_client(container)
             for blob in container_client.list_blobs():
                 _save_blob(blob.name, dir_name, container_client)
 
@@ -150,11 +160,8 @@ class MaskAzure:
 
             means_array_threshold = means_array_median / 2 if axis == 0 else 1.1 * means_array_median
 
-            # aux clipper
-            clip = lambda t: 0 if t - means_array_threshold < 0 else t
-
             # apply on mean vec on M
-            means_array_mod = np.array([clip(t) for t in means_array])
+            means_array_mod = np.array([(lambda t: 0 if t - means_array_threshold < 0 else t)(t) for t in means_array])
 
             # find suspected points for the main objects' boundaries
             right, left = _find_turning_pts(abs(_derivative(means_array_mod)), 50)
@@ -191,7 +198,7 @@ class MaskAzure:
 
         return result_dict
 
-    def crop_all_and_plot(self, apply_mask=False, save_to_local=False, rescale=False, plot=True):
+    def create_mask(self, height, width, apply_mask=False, save_to_local=False, rescale=False, plot=False):
 
         def _pad(img, h, w):
             #  in case when you have odd number
@@ -218,51 +225,51 @@ class MaskAzure:
                 kernel = np.ones((ker, ker), np.uint8)
                 mask_dilate = cv2.dilate(mask, kernel, iterations=ite)
                 imask_dilate = mask_dilate == 0
-                g_img = np.zeros_like(img, np.uint8)
-                g_img.fill(255)
-                g_img[imask_dilate] = img[imask_dilate]
+                greened_img = np.zeros_like(img, np.uint8)
+                greened_img.fill(255)
+                greened_img[imask_dilate] = img[imask_dilate]
 
-                return g_img, mask_dilate, img
+                return greened_img, mask_dilate, img
 
             # mask by slicing the green spectrum
-            img = cv2.imread(img_path)[vlc:vrc, hlc:hrc]  # cv2 read & crop
-            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # convert to hsv
+            image = cv2.imread(img_path)[vlc:vrc, hlc:hrc]  # cv2 read & crop
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # convert to hsv
             mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))
 
-            # apply the masking:
-            g_img = np.zeros_like(img, np.uint8)
-            mask_g = np.zeros_like(img, np.uint8)
+            # apply the mask:
+            g_img = np.zeros_like(image, np.uint8)
+            mask_g = np.zeros_like(image, np.uint8)
             g_img.fill(255)
-            g_img[mask > 0] = img[mask > 0]
-            mask_g[~mask > 0] = img[~mask > 0]
+            g_img[mask > 0] = image[mask > 0]
+            mask_g[~mask > 0] = image[~mask > 0]
             mask_g[mask_g != 0] = 255
 
             # erosion and dilation
-            g_img, mask, img = _dilate_function(img, mask_g, 3, 5)
-            g_img, mask, img = _erode_function(img, mask, 6, 20)
-            return g_img, mask, img
+            g_img, mask, image = _dilate_function(image, mask_g, 3, 5)
+            g_img, mask, image = _erode_function(image, mask, 6, 20)
+            return g_img, mask, image
 
         container_list = sorted(glob.glob(self.local_dir + "/*"))
 
         for container_path in container_list:
 
-            d = self.organize_container(container_path);
+            d = self.organize_container(container_path)
             # N = int(math.ceil(math.sqrt(len([item for sublist in list(d.values()) for item in sublist]))))
             N = int(math.ceil(len([item for sublist in list(d.values()) for item in sublist])) / 4)
             M = 4
             # N = math.ceil(len(list(d.values()))/4)
-            dict_w_crop = self.crop_session(d);
+            dict_w_crop = self.crop_session(d)
 
             if plot:
-                fig, axs = plt.subplots(nrows=N, ncols=M, figsize=(20, 20));
-                fig.suptitle(f'cropping results {container_path}', fontsize=20, y=1);
+                fig, axs = plt.subplots(nrows=N, ncols=M, figsize=(20, 20))
+                fig.suptitle(f'cropping results {container_path}', fontsize=20, y=1)
                 # fig.tight_layout();
 
             for i, j in product(range(N), range(M)):
 
                 try:
-                    img_path, crop = dict_w_crop.popitem();
-                    hlc, hrc, vlc, vrc = crop;
+                    img_path, crop = dict_w_crop.popitem()
+                    hlc, hrc, vlc, vrc = crop
                 except KeyError:
                     continue
 
@@ -274,12 +281,12 @@ class MaskAzure:
 
                 # rescaling image to WxH by padding
                 if rescale:
-                    img = _pad(img, h=720, w=1080)
+                    img = _pad(img, h=height, w=width)
 
                 # plotting
                 if plot:
-                    axs[i, j].set_title(img_path.split("/")[-1]);
-                    axs[i, j].imshow(img);
+                    axs[i, j].set_title(img_path.split("/")[-1])
+                    axs[i, j].imshow(img)
 
                 # save to directory
                 if save_to_local:
@@ -288,15 +295,5 @@ class MaskAzure:
                         self.target_dir + "/" + img_path.split("/")[-2])
 
                     cv2.imwrite(self.target_dir + "/" + img_path.split("/")[-2] + "/" + img_path.split("/")[-1], img)
-
-
-#MaskAzure().delete()
-#MaskAzure().init()
-#containers = MaskAzure().retrieve_last_k_containers(1)
-#MaskAzure().dl_blobs_to_local(containers)
-
-#d = MaskAzure().organize_container("/home/liteandfog/raspi-colmap/d1/1639489210-673626")
-#print(MaskAzure().crop_session(d))
-
-MaskAzure().crop_all_and_plot(apply_mask=True, rescale=True, save_to_local=True, plot=False)
-#plt.show()
+            if plot:
+                plt.show()
