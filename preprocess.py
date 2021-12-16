@@ -51,6 +51,8 @@ class MaskAzure:
         container = self.retrieve_last_k_containers(1)
         self.dl_blobs_to_local(container)
 
+        return container[0]  # return last container's name
+
     @staticmethod
     def retrieve_last_k_containers(k):
         """function retrieves last k containers from Azure Blobs Storage."""
@@ -297,3 +299,6 @@ class MaskAzure:
                     cv2.imwrite(self.target_dir + "/" + img_path.split("/")[-2] + "/" + img_path.split("/")[-1], img)
             if plot:
                 plt.show()
+
+
+
