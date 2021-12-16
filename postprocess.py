@@ -9,7 +9,7 @@ connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_2')
 blob_service_client_2 = BlobServiceClient.from_connection_string(connect_str)
 
 
-class AzureFlush:
+class FlushAzure:
     def __init__(self, pcd_dir, container_name):
         self.pcd_dir = pcd_dir
         self.container_name = container_name
@@ -46,5 +46,5 @@ class AzureFlush:
             with open(file, "rb") as data:
                 blob_client.upload_blob(data)
 
-
-AzureFlush("/home/liteandfog/raspi-colmap/data/d3", "test3").flush()
+#test
+#FlushAzure("/home/liteandfog/raspi-colmap/data/d3", "test4").flush()

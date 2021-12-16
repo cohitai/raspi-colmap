@@ -28,15 +28,11 @@ def main():
     extractor.create_mask(height=720, width=1080, apply_mask=True, rescale=True, save_to_local=True, plot=False)
 
     # reconstruct
-    # colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
-    # colmap_client.reconstruct(outliers=True, poisson=True)
+    colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
+    colmap_client.reconstruct(outliers=True, poisson=True)
 
     # upload to azure
-    uploader = FlushAzure(COLMAP_OUTPUT_DIR, container_name).flush()
-
-
-    # test
-    # print(extractor.retrieve_last_k_containers(1))
+    FlushAzure(COLMAP_OUTPUT_DIR, container_name).flush()
 
 
 if __name__ == '__main__':
