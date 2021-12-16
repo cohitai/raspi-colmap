@@ -1,8 +1,10 @@
 import os
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, AccessPolicy, ContainerSasPermissions, PublicAccess
+from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 from glob import glob
 import logging
 
+
+# Azure Storage Account: pointclouds1
 os.environ['AZURE_STORAGE_CONNECTION_STRING_2'] = 'DefaultEndpointsProtocol=https;AccountName=pointclouds1;AccountKey=2+G3qwZZXh13ShcSpoUHxFxj6i/3YYTurFibVeKoVBI6HrwdOHwc2sgEQydY5VTzSwavVRiFrL5Uf5MQSF4oFA==;EndpointSuffix=core.windows.net'
 connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_2')
 # Create the BlobServiceClient object which will be used to create a container client.

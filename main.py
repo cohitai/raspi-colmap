@@ -34,6 +34,9 @@ def main():
     # upload to azure
     FlushAzure(COLMAP_OUTPUT_DIR, container_name).flush()
 
+    # test
+    #FlushAzure(COLMAP_OUTPUT_DIR, 'test5').flush()
+
 
 if __name__ == '__main__':
     main()

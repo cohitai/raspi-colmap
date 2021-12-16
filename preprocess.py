@@ -1,6 +1,6 @@
 import os
 import shutil
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, AccessPolicy, ContainerSasPermissions, PublicAccess
+from azure.storage.blob import BlobServiceClient
 from datetime import datetime
 import logging
 import glob
@@ -14,17 +14,11 @@ import math
 # logging.getLogger('raspi-colmap')
 # logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
 
-# Azure connecting info. added as environment variable
-
+# Azure Storage Account: blobsdb
 os.environ['AZURE_STORAGE_CONNECTION_STRING_1'] = 'DefaultEndpointsProtocol=https;AccountName=blobsdb;AccountKey=tJK43kihAcaeZMjcegWFcyg8tsFmOr9f2Kn8q6NUinVSJW5O3jymYbjaiGBjmx8Ibq5LsBVPcABvYeV+tUCPnQ==;EndpointSuffix=core.windows.net'
 connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_1')
 # Create the BlobServiceClient object which will be used to create a container client.
 blob_service_client_1 = BlobServiceClient.from_connection_string(connect_str)
-
-os.environ['AZURE_STORAGE_CONNECTION_STRING_2'] = 'DefaultEndpointsProtocol=https;AccountName=pointclouds1;AccountKey=2+G3qwZZXh13ShcSpoUHxFxj6i/3YYTurFibVeKoVBI6HrwdOHwc2sgEQydY5VTzSwavVRiFrL5Uf5MQSF4oFA==;EndpointSuffix=core.windows.net'
-connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_2')
-# Create the BlobServiceClient object which will be used to create a container client.
-blob_service_client_2 = BlobServiceClient.from_connection_string(connect_str)
 
 
 class MaskAzure:
