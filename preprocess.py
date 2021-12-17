@@ -45,9 +45,12 @@ class MaskAzure:
             shutil.rmtree(self.target_dir)
         os.makedirs(self.target_dir)
 
+        #if os.path.exists(self.output_dir):
+        #    subprocess.Popen(['sudo', '-S', 'rm', "-r", self.output_dir], stdin=subprocess.PIPE,
+        #                     stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate(input=SERVER_PWD)
+
         if os.path.exists(self.output_dir):
-            subprocess.Popen(['sudo', '-S', 'rm', "-r", self.output_dir], stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate(input=SERVER_PWD)
+            shutil.rmtree(self.output_dir)
         os.makedirs(self.output_dir)
 
     def fetch_last_container(self):

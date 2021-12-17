@@ -19,6 +19,7 @@ COLMAP_OUTPUT_DIR = DATA_DIR + "/d3"
 
 
 def main():
+
     # preprocess
     extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
     # clean the working directory
