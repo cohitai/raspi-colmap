@@ -3,9 +3,10 @@ from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPerm
 from glob import glob
 import logging
 
+from dotenv import load_dotenv
+load_dotenv()  # take environment variables from .env.
 
 # Azure Storage Account: pointclouds1
-os.environ['AZURE_STORAGE_CONNECTION_STRING_2'] = 'DefaultEndpointsProtocol=https;AccountName=pointclouds1;AccountKey=2+G3qwZZXh13ShcSpoUHxFxj6i/3YYTurFibVeKoVBI6HrwdOHwc2sgEQydY5VTzSwavVRiFrL5Uf5MQSF4oFA==;EndpointSuffix=core.windows.net'
 connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_2')
 # Create the BlobServiceClient object which will be used to create a container client.
 blob_service_client_2 = BlobServiceClient.from_connection_string(connect_str)
@@ -47,6 +48,3 @@ class FlushAzure:
             # Upload the created img.
             with open(file, "rb") as data:
                 blob_client.upload_blob(data)
-
-#test
-#FlushAzure("/home/liteandfog/raspi-colmap/data/d3", "test4").flush()

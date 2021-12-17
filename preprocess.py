@@ -10,15 +10,16 @@ import matplotlib.pyplot as plt
 from itertools import product
 import math
 import subprocess
+from dotenv import load_dotenv
+load_dotenv()  # take environment variables from .env.
 
 # create logger
 # logging.getLogger('raspi-colmap')
 # logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
 
-SERVER_PWD = b'Mancave3090!'
+SERVER_PWD = bytes(os.getenv('SERVER_PWD'), 'utf-8')
 
 # Azure Storage Account: blobsdb
-os.environ['AZURE_STORAGE_CONNECTION_STRING_1'] = 'DefaultEndpointsProtocol=https;AccountName=blobsdb;AccountKey=tJK43kihAcaeZMjcegWFcyg8tsFmOr9f2Kn8q6NUinVSJW5O3jymYbjaiGBjmx8Ibq5LsBVPcABvYeV+tUCPnQ==;EndpointSuffix=core.windows.net'
 connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_1')
 # Create the BlobServiceClient object which will be used to create a container client.
 blob_service_client_1 = BlobServiceClient.from_connection_string(connect_str)
