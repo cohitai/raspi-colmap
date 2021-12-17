@@ -22,6 +22,7 @@ HT, WH = 720, 1080
 
 
 def main():
+
     # preprocess
     extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
     # clean the working directory
