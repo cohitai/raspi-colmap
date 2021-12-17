@@ -9,10 +9,13 @@ import cv2
 import matplotlib.pyplot as plt
 from itertools import product
 import math
+import subprocess
 
 # create logger
 # logging.getLogger('raspi-colmap')
 # logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
+
+SERVER_PWD = b'Mancave3090!'
 
 # Azure Storage Account: blobsdb
 os.environ['AZURE_STORAGE_CONNECTION_STRING_1'] = 'DefaultEndpointsProtocol=https;AccountName=blobsdb;AccountKey=tJK43kihAcaeZMjcegWFcyg8tsFmOr9f2Kn8q6NUinVSJW5O3jymYbjaiGBjmx8Ibq5LsBVPcABvYeV+tUCPnQ==;EndpointSuffix=core.windows.net'
@@ -23,11 +26,13 @@ blob_service_client_1 = BlobServiceClient.from_connection_string(connect_str)
 
 class MaskAzure:
 
-    def __init__(self, local_dir, target_dir):
+    def __init__(self, local_dir, target_dir, output_dir):
         # directory to store raw containers
         self.local_dir = local_dir
         # directory to store containers after cropping
         self.target_dir = target_dir
+        # directory to store colmap output
+        self.output_dir = output_dir
 
     def init(self):
         """method for initializing the workspace"""
@@ -38,6 +43,11 @@ class MaskAzure:
         if os.path.exists(self.target_dir):
             shutil.rmtree(self.target_dir)
         os.makedirs(self.target_dir)
+
+        if os.path.exists(self.output_dir):
+            subprocess.Popen(['sudo', '-S', 'rm', "-r", self.output_dir], stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate(input=SERVER_PWD)
+        os.makedirs(self.output_dir)
 
     def fetch_last_container(self):
         """method to download last container """
@@ -293,6 +303,3 @@ class MaskAzure:
                     cv2.imwrite(self.target_dir + "/" + img_path.split("/")[-2] + "/" + img_path.split("/")[-1], img)
             if plot:
                 plt.show()
-
-
-

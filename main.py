@@ -4,6 +4,8 @@ from postprocess import FlushAzure
 import logging
 import sys
 import os
+import subprocess
+
 
 # create logger for 'raspi-colmap'
 logging.getLogger('raspi-colmap')
@@ -19,7 +21,7 @@ COLMAP_OUTPUT_DIR = DATA_DIR + "/d3"
 
 def main():
     # preprocess
-    extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR)
+    extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
     # clean the working directory
     extractor.init()
     # dl last container to local
@@ -34,9 +36,15 @@ def main():
     # upload to azure
     FlushAzure(COLMAP_OUTPUT_DIR, container_name).flush()
 
-    # test
-    #FlushAzure(COLMAP_OUTPUT_DIR, 'test5').flush()
-
 
 if __name__ == '__main__':
     main()
+
+    # preprocess
+    #extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
+    # clean the working directory
+    #extractor.init()
+
+#path = "data/d3"
+#proc = subprocess.Popen(['sudo', '-S', 'rm', "-r", path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate(input=b'Mancave3090!')
+#print(proc)
