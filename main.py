@@ -17,14 +17,14 @@ RAW_DATA_DIR = DATA_DIR + "/d1"
 MASKED_DATA_DIR = DATA_DIR + "/d2"
 COLMAP_OUTPUT_DIR = DATA_DIR + "/d3"
 
-# for the Dockerized application: 2 containers app:
+# for the Dockerized application: 2 containers in the app:
 #                1. principal container raspi/colmap with these files.
 #                2. colmap:test container
 #                shared volumes:
 #                docker daemon local to docker daemon in container (1).
 #                /data/ local to /data/ in container (1).
 #                /data/ local to /data/ in container (2).
-# running with:
+
 
 
 def main():
