@@ -17,6 +17,9 @@ RAW_DATA_DIR = DATA_DIR + "/d1"
 MASKED_DATA_DIR = DATA_DIR + "/d2"
 COLMAP_OUTPUT_DIR = DATA_DIR + "/d3"
 
+# frame's size:
+HT, WH = 720, 1080
+
 
 def main():
     # preprocess
@@ -26,7 +29,7 @@ def main():
     # dl last container to local
     container_name = extractor.fetch_last_container()
     # apply mask and save to local
-    extractor.create_mask(height=720, width=1080, apply_mask=True, rescale=True, save_to_local=True, plot=False)
+    extractor.create_mask(height=HT, width=WH, apply_mask=True, rescale=True, save_to_local=True, plot=False)
 
     # reconstruct
     colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)

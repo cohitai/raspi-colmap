@@ -26,7 +26,8 @@ class DockerizedColmap:
         self.output_inlier_cloud = output_dir + '/dense_inlier.ply'
         self.output_poisson = output_dir + '/poisson.ply'
 
-        if not os.path.exists(self.output_dir): os.makedirs(self.output_dir)
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
 
     def reconstruct(self, outliers=False, poisson=False):
         """ COLMAP in docker

@@ -98,6 +98,11 @@ class MaskAzure:
         :param: containers path.
         :returns: a sorted dictionary, keys are camerasIds, values are path_to_image´s. """
 
+        def _retrieve_time(s):
+            start = s.find("img") + len("img")
+            end = s.find(".jpg")
+            return float(s[start:end].replace("-", "."))
+
         files = [file.split("/")[-1] for file in glob.glob(container_path + "/*")]
         cameras = list(set([file[0:2] for file in files]))
         blob2crop_dictionary = {}
@@ -108,7 +113,7 @@ class MaskAzure:
         for file in files:
             blob2crop_dictionary[file[0:2]].append(container_path + "/" + file)
         for cam in cameras:
-            blob2crop_dictionary[cam] = sorted(blob2crop_dictionary[cam])
+            blob2crop_dictionary[cam].sort(key=lambda x: _retrieve_time(x))
 
         return blob2crop_dictionary
 
@@ -122,7 +127,7 @@ class MaskAzure:
 
             return [cv2.subtract(im2, im1), cv2.subtract(im3, im2)]
 
-        def _find_crop_indices(img_diff, axis=0):
+        def _find_crop_indices(img_diff):
             """auxiliary function to compute crop indices by detecting moving objects in the frames"""
 
             def _derivative(series, interval=1):
@@ -133,52 +138,95 @@ class MaskAzure:
                     diff.append(value)
                 return np.array(diff)
 
-            def _find_turning_pts(np_array, nz):
-                """auxiliary function searches for left/right turning/jumping points in <means_array>,
-                   :param: np_array,
-                           nz, an integer, representing a sequel of zeros which should come before/after the suspected
-                           point."""
-                left_turn = []
-                right_turn = []
+            def _find_turning_pts(series, z_interval, vertical=False):
 
-                for t in range(nz, len(np_array)):
-                    if np_array[t] != 0:
-                        for j in range(1, nz + 1):
-                            if np_array[t - j] != 0:
+                """function searches for left/right jumping points in M,
+                    :param: interval is an integer representing a sequel of
+                    zeros which should come to the left/right of the suspected
+                    point. """
+
+                def _argmax(lst):
+                    """returns index of maximum element from tuples list by second coordinate. """
+                    y_coor = [x[1] for x in lst]
+                    return y_coor.index(max(y_coor))
+
+                def _calculate_zeroes(pt, series):
+                    """returns actual amount if zeroes before/after the <pt> in <series> """
+
+                    i = 1
+                    while (pt - i) >= 0 and series[pt - i] == 0:
+                        i += 1
+                    zeroes_left = i - 1
+
+                    i = 1
+                    while (pt + i) <= len(series) - 1 and series[pt + i] == 0:
+                        i += 1
+                    zeroes_right = i - 1
+
+                    return zeroes_left, zeroes_right
+
+                left = []
+                right = []
+
+                # checks if t is a left jumping point.
+                for t in range(z_interval, len(series)):
+                    if series[t] != 0:
+                        for j in range(1, z_interval + 1):
+                            if series[t - j] != 0:
                                 break
-                        if j == nz:
-                            left_turn.append(t)
+                        if j == z_interval and series[t - z_interval] == 0:
+                            left.append((t, _calculate_zeroes(t, series)[0]))
 
-                for t in range(0, len(np_array) - nz):
-                    if np_array[t] != 0:
-                        for j in range(1, nz + 1):
-                            if np_array[t + j] != 0:
+                # checks if t is a right jumping point.
+                for t in range(1, len(series) - z_interval):
+                    if series[t] != 0:
+                        for j in range(1, z_interval + 1):
+                            if series[t + j] != 0:
                                 break
-                        if j == nz:
-                            right_turn.append(t)
+                        if j == z_interval and series[t + z_interval] == 0:
+                            right.append((t, _calculate_zeroes(t, series)[1]))
 
-                return [0] + left_turn + [len(np_array)], [0] + right_turn + [len(np_array)]
+                if vertical:
+                    return left[0][0], right[-1][0]
+
+                return left[_argmax(left)][0], right[_argmax(right)][0]
+
+            ###
+
+            # safety intervel to be added
+            M_horizontal_safe, M_vertical_safe = 100, 130
+            # number_of_zeros parameters which should come before/after a jumping point
+            IZ_h, IZ_v = 50, 20
+
+            # dictionary init
+            crop_interval = {}
 
             # reduce img to vertical mean vector
-            means_array = img_diff.mean(axis=axis)
+            M_horizontal = img_diff.mean(axis=0)
+            M_vertical = img_diff.mean(axis=1)
 
             # compute median for clipping
-            means_array_median = (means_array.max() - means_array.min()) / 2
+            horizontal_median = (M_horizontal.max() - M_horizontal.min()) / 2
+            vertical_median = (M_vertical.max() - M_vertical.min()) / 2
 
-            means_array_threshold = means_array_median / 2 if axis == 0 else 1.1 * means_array_median
+            # clipper
+            horizontal_clip = lambda t: 0 if t - horizontal_median / 2 < 0 else t
+            vertical_clip = lambda t: 0 if t - vertical_median / 2 < 0 else t
 
-            # apply on mean vec on M
-            means_array_mod = np.array([(lambda t: 0 if t - means_array_threshold < 0 else t)(t) for t in means_array])
+            # apply clipper
+            M_horizontal_mod = np.array([horizontal_clip(t) for t in M_horizontal])
+            M_vertical_mod = np.array([vertical_clip(t) for t in M_vertical])
 
             # find suspected points for the main objects' boundaries
-            right, left = _find_turning_pts(abs(_derivative(means_array_mod)), 50)
+            right_h, left_h = _find_turning_pts(abs(_derivative(M_horizontal_mod)), IZ_h, vertical=False)
+            right_v, left_v = _find_turning_pts(abs(_derivative(M_vertical_mod)), IZ_v, vertical=True)
 
-            # compute the biggest component
-            ind_max = np.argmax(list(map(int.__sub__, left, right)))
+            # bug
+            right_v = 0 if right_v > len(M_vertical) / 4 else right_v
 
-            # safety interval to be added
-            means_array_safe = 100 if axis == 0 else 150
-            crop_interval = (max(0, right[ind_max] - means_array_safe), min(len(means_array_mod), left[ind_max] + means_array_safe))
+            # adding safety interval to the final result
+            crop_interval[0] = (max(0, right_h - M_horizontal_safe), min(len(M_horizontal_mod), left_h + M_horizontal_safe))
+            crop_interval[1] = (max(0, right_v - M_vertical_safe), min(len(M_vertical_mod), left_v + M_vertical_safe))
 
             return crop_interval
 
@@ -186,17 +234,18 @@ class MaskAzure:
         result_dict = {}
 
         for cam in cameras:
+            num_pics = len(blob2crop[cam])
             grey = [cv2.cvtColor(cv2.imread(img), cv2.COLOR_BGR2GRAY) for img in blob2crop[cam]]
-            img_inds = [x for x in range(len(grey))]
+            ind2img = dict(zip([x for x in range(num_pics)], [img for img in blob2crop[cam]]))
 
-            for ind in img_inds:
+            for ind in ind2img.keys():
                 diff_ind = list(np.argsort([abs(x - ind) for x in [x for x in range(len(grey))]])[:3])
                 d_im1, d_im2 = _compute_diffs(grey[diff_ind[1]], grey[diff_ind[0]], grey[diff_ind[2]])
 
-                hl1, hr1 = _find_crop_indices(d_im1, axis=0)
-                hl2, hr2 = _find_crop_indices(d_im2, axis=0)
-                vl1, vr1 = _find_crop_indices(d_im1, axis=1)
-                vl2, vr2 = _find_crop_indices(d_im2, axis=1)
+                hl1, hr1 = _find_crop_indices(d_im1)[0]
+                hl2, hr2 = _find_crop_indices(d_im2)[0]
+                vl1, vr1 = _find_crop_indices(d_im1)[1]
+                vl2, vr2 = _find_crop_indices(d_im2)[1]
 
                 hlc, hrc = min(hl1, hl2), max(hr1, hr2)
                 vlc, vrc = min(vl1, vl2), max(vr1, vr2)
@@ -216,7 +265,7 @@ class MaskAzure:
             return np.copy(np.pad(img, ((top_pad, bottom_pad), (left_pad, right_pad), (0, 0)), mode='constant',
                                   constant_values=255))
 
-        def _mask_function(img_path, hlc, hrc, vlc, vrc):
+        def _mask_function(img_path, hlc, hrc, vlc, vrc, method='grayscale'):
 
             def _erode_function(img, mask, ker, ite):
                 kernel = np.ones((ker, ker), np.uint8)
@@ -240,8 +289,17 @@ class MaskAzure:
 
             # mask by slicing the green spectrum
             image = cv2.imread(img_path)[vlc:vrc, hlc:hrc]  # cv2 read & crop
-            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # convert to hsv
-            mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))
+
+            # compute mask
+            # HSV
+            if method == "hsv":
+                hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # convert to hsv
+                mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))  # mask by slicing the green spectrum
+
+            # Grayscale
+            if method == "grayscale":
+                grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                mask = cv2.inRange(grayscale, 0, 230)
 
             # apply the mask:
             g_img = np.zeros_like(image, np.uint8)
@@ -252,8 +310,9 @@ class MaskAzure:
             mask_g[mask_g != 0] = 255
 
             # erosion and dilation
-            g_img, mask, image = _dilate_function(image, mask_g, 3, 5)
-            g_img, mask, image = _erode_function(image, mask, 6, 20)
+            g_img, mask, image = _dilate_function(image, mask_g, 3, 0)
+            g_img, mask, image = _erode_function(image, mask, 6, 0)
+
             return g_img, mask, image
 
         container_list = sorted(glob.glob(self.local_dir + "/*"))
@@ -261,16 +320,15 @@ class MaskAzure:
         for container_path in container_list:
 
             d = self.organize_container(container_path)
-            # N = int(math.ceil(math.sqrt(len([item for sublist in list(d.values()) for item in sublist]))))
+
             N = int(math.ceil(len([item for sublist in list(d.values()) for item in sublist])) / 4)
             M = 4
-            # N = math.ceil(len(list(d.values()))/4)
+
             dict_w_crop = self.crop_session(d)
 
             if plot:
                 fig, axs = plt.subplots(nrows=N, ncols=M, figsize=(20, 20))
                 fig.suptitle(f'cropping results {container_path}', fontsize=20, y=1)
-                # fig.tight_layout();
 
             for i, j in product(range(N), range(M)):
 
