@@ -1,6 +1,7 @@
 import os
+from datetime import datetime
 
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import ResourceExistsError
 from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 from glob import glob
 import logging
@@ -24,14 +25,15 @@ class FlushAzure:
         # Relevant files
         files = glob(self.pcd_dir + '/' + '*.ply')
 
-        # Delete container if it exists
-        try:
-            blob_service_client_2.delete_container(self.container_name)
-        except ResourceNotFoundError:
-            logging.info(f"Container {self.container_name} doesnt exist yet.")
-
         # Create container
-        container_client = blob_service_client_2.create_container(self.container_name)
+        try:
+            container_client = blob_service_client_2.create_container(self.container_name)
+        except ResourceExistsError:
+            logging.info(f"Container {self.container_name} already exists.")
+            timestamp = str(datetime.timestamp(datetime.now())).replace(".", "-")
+            self.container_name = self.container_name + "-" + timestamp
+            logging.info(f"Container new name: {self.container_name}.")
+            container_client = blob_service_client_2.create_container(self.container_name)
 
         # Create access policy
         access_policy = AccessPolicy(permission=ContainerSasPermissions(read=True, write=True))
