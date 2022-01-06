@@ -25,15 +25,15 @@ def main():
     # preprocess
     extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
     # clean the working directory
-    extractor.init()
+    #extractor.init()
     # dl last container to local
     container_name = extractor.fetch_last_container()
     # apply mask and save to local
-    extractor.create_mask(height=HT, width=WH, apply_mask=True, rescale=True, save_to_local=True, plot=False)
+    #extractor.create_mask(height=HT, width=WH, apply_mask=True, rescale=True, save_to_local=True, plot=False)
 
     # reconstruct
-    colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
-    colmap_client.reconstruct(outliers=True, poisson=True)
+    #colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
+    #colmap_client.reconstruct(outliers=False, poisson=False)
 
     # upload to azure
     FlushAzure(COLMAP_OUTPUT_DIR, container_name).flush()
