@@ -25,7 +25,7 @@ COLMAP_OUTPUT_DIR = DATA_DIR + "/d3"
 #                /data/ local to /data/ in container (1).
 #                /data/ local to /data/ in container (2).
 # run with:
-# docker run -v /var/run/docker.sock:/var/run/docker.sock  -v /home/liteandfog/raspi-colmap/data:/app/data --runtime=nvidia  raspi/reconstructor:debug
+# docker run -v /var/run/docker.sock:/var/run/docker.sock  -v /home/liteandfog/raspi-colmap/data:/app/data --runtime=nvidia  raspi/reconstructor:latest
 
 
 def main():
@@ -44,6 +44,7 @@ def main():
     colmap_client.reconstruct(outliers=False, poisson=False)
 
     # upload to azure
+    logging.info(f"container's name to upload: {container_name}")
     FlushAzure(COLMAP_OUTPUT_DIR, container_name).flush()
 
 

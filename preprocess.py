@@ -268,7 +268,7 @@ class MaskAzure:
             return np.copy(np.pad(img, ((top_pad, bottom_pad), (left_pad, right_pad), (0, 0)), mode='constant',
                                   constant_values=255))
 
-        def _mask_function(img_path, hlc, hrc, vlc, vrc, method='grayscale'):
+        def _mask_function(img_path, hlc, hrc, vlc, vrc, method='hsv'):
 
             def _erode_function(img, mask, ker, ite):
                 kernel = np.ones((ker, ker), np.uint8)
@@ -297,7 +297,7 @@ class MaskAzure:
             # HSV
             if method == "hsv":
                 hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # convert to hsv
-                mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))  # mask by slicing the green spectrum
+                mask = cv2.inRange(hsv, (30, 28, 28), (80, 255, 255))  # mask by slicing the green spectrum
 
             # Grayscale
             if method == "grayscale":

@@ -1,4 +1,6 @@
 import os
+
+from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 from glob import glob
 import logging
@@ -21,6 +23,12 @@ class FlushAzure:
 
         # Relevant files
         files = glob(self.pcd_dir + '/' + '*.ply')
+
+        # Delete container if it exists
+        try:
+            blob_service_client_2.delete_container(self.container_name)
+        except ResourceNotFoundError:
+            logging.info(f"Container {self.container_name} doesnt exist yet.")
 
         # Create container
         container_client = blob_service_client_2.create_container(self.container_name)
