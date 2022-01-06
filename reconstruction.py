@@ -71,6 +71,9 @@ class DockerizedColmap:
 
         self._run_colmap(client, colmap_cmds, mount_dict, self.DATASET_PATH)
 
+
+
+        ###### move to different module
         """outliers removal"""
         if outliers:
             pcd = o3d.io.read_point_cloud(self.input_dense)
