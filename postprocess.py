@@ -1,5 +1,4 @@
 import os
-
 from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
 from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 from glob import glob
