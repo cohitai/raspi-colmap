@@ -27,13 +27,15 @@ blob_service_client_1 = BlobServiceClient.from_connection_string(connect_str)
 
 class MaskAzure:
 
-    def __init__(self, local_dir, target_dir, output_dir):
+    def __init__(self, local_dir, target_dir, output_dir, supp_dir):
         # directory to store raw containers
         self.local_dir = local_dir
         # directory to store containers after cropping
         self.target_dir = target_dir
         # directory to store colmap output
         self.output_dir = output_dir
+        # directory to store the final output
+        self.supp_dir = supp_dir
 
     def init(self):
         """method for initializing the workspace"""
@@ -49,6 +51,10 @@ class MaskAzure:
             subprocess.Popen(['sudo', '-S', 'rm', "-r", self.output_dir], stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate(input=SERVER_PWD)
         os.makedirs(self.output_dir)
+
+        if os.path.exists(self.supp_dir):
+            shutil.rmtree(self.supp_dir)
+        os.makedirs(self.supp_dir)
 
     def fetch_last_container(self):
         """method to download last container """
@@ -254,7 +260,7 @@ class MaskAzure:
 
         return result_dict
 
-    def create_mask(self, height, width, apply_mask=False, save_to_local=False, rescale=False, plot=False):
+    def create_mask(self, height, width, hsv_params=((30, 28, 28), (80, 255, 255)), apply_mask=False, save_to_local=False, rescale=False, plot=False):
 
         def _pad(img, h, w):
             #  in case when you have odd number
@@ -265,7 +271,7 @@ class MaskAzure:
             return np.copy(np.pad(img, ((top_pad, bottom_pad), (left_pad, right_pad), (0, 0)), mode='constant',
                                   constant_values=255))
 
-        def _mask_function(img_path, hlc, hrc, vlc, vrc, method='grayscale'):
+        def _mask_function(img_path, hlc, hrc, vlc, vrc, method='hsv'):
 
             def _erode_function(img, mask, ker, ite):
                 kernel = np.ones((ker, ker), np.uint8)
@@ -294,7 +300,7 @@ class MaskAzure:
             # HSV
             if method == "hsv":
                 hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # convert to hsv
-                mask = cv2.inRange(hsv, (40, 28, 28), (80, 255, 255))  # mask by slicing the green spectrum
+                mask = cv2.inRange(hsv, hsv_params[0], hsv_params[1])  # mask by slicing the green spectrum
 
             # Grayscale
             if method == "grayscale":

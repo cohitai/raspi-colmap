@@ -58,3 +58,18 @@ class FlushAzure:
             # Upload the created img.
             with open(file, "rb") as data:
                 blob_client.upload_blob(data)
+
+    def flush_from(self, files=[]):
+
+        for file in files:
+
+            # fetch file name
+            _, file_name = os.path.split(file)
+
+            # Create a blob client using the local file name as the name for the blob.
+            blob_client = blob_service_client_2.get_blob_client(container=self.container_name, blob=file_name)
+            logging.info(f"\nUploading to Azure Storage as blob:\n\t{file_name}")
+
+            # Upload the created img.
+            with open(file, "rb") as data:
+                blob_client.upload_blob(data)

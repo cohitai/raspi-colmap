@@ -1,0 +1,10 @@
+d1/
+d2/
+d3/
+.idea/
+.python-version
+data/
+.env
+.ipynb_checkpoints/
+a.out
+/aux_mask_trackbar.py
