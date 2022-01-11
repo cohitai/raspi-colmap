@@ -22,7 +22,7 @@ SUPP_OUTPUT_DIR = DATA_DIR + "/d4"
 
 
 def main():
-    # preprocess
+    # preprocess (1)
     extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, SUPP_OUTPUT_DIR)
     # clean the working directory
     extractor.init()
@@ -31,10 +31,10 @@ def main():
 
     # container_name = ""
 
-    # apply mask and save to local
-    extractor.create_mask(height=720, width=1080, hsv_params=((33, 60, 24), (179, 255, 255)), apply_mask=True, rescale=True, save_to_local=True, plot=False)
+    # apply mask and save to local (2)
+    extractor.create_mask(height=720, width=1080, hsv_params=((0, 51, 0), (179, 255, 255)), dilate_iter=2, erode_iter=3, apply_mask=True, rescale=True, save_to_local=True, plot=False)
 
-    # reconstruct
+    # reconstruct (3)
     colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
     colmap_client.reconstruct()
 
@@ -42,16 +42,16 @@ def main():
     flusher = FlushAzure(COLMAP_OUTPUT_DIR, container_name)
     flusher.flush()
 
-    # download dense.ply to local
-    #extractor.init()
+    # download dense.ply to local and apply post-operations (4)
     PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_dense_from_remote()
     PcdOps(SUPP_OUTPUT_DIR, container_name).reconstruct(outliers=True, poisson=True)
 
     # flush new files to container
-    flusher.flush_from([COLMAP_OUTPUT_DIR + "/" + "dense_inlier.ply", COLMAP_OUTPUT_DIR + "/" + "poisson.ply"])
+    flusher.flush_from([SUPP_OUTPUT_DIR + "/" + "dense_inlier.ply", SUPP_OUTPUT_DIR + "/" + "poisson.ply"])
 
 
 if __name__ == '__main__':
     while True:
         main()
+        logging.info("going to sleep..")
         time.sleep(10000)
