@@ -56,10 +56,10 @@ class MaskAzure:
             shutil.rmtree(self.supp_dir)
         os.makedirs(self.supp_dir)
 
-    def fetch_last_container(self):
+    def fetch_last_container(self, debug_container=None):
         """method to download last container """
 
-        container = self.retrieve_last_k_containers(1)
+        container = debug_container if debug_container else self.retrieve_last_k_containers(1)
         self.dl_blobs_to_local(container)
 
         return container[0]  # return last container's name

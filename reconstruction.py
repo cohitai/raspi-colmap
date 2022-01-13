@@ -58,8 +58,8 @@ class DockerizedColmap:
             --input_type geometric \
             --output_path {self.DENSE_PLY_PATH}"
         cmd7 = f"colmap model_converter \
-            --input_path {self.SPARSE_PATH} \
-            --output_path {self.SPARSE_PATH} \
+            --input_path {self.NEW_SPARSE_PATH} \
+            --output_path {self.NEW_SPARSE_PATH} \
             --output_type TXT"
 
         colmap_cmds = {"feature_extractor": cmd1, "exhaustive_matcher": cmd2, "mapper": cmd3, "image_undistorter": cmd4,

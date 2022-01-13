@@ -28,11 +28,10 @@ def main():
     extractor.init()
     # dl last container to local
     container_name = extractor.fetch_last_container()
-
-    # container_name = ""
-
+    # debug_container=["1639656186-281117"]
     # apply mask and save to local (2)
-    extractor.create_mask(height=720, width=1080, hsv_params=((0, 51, 0), (179, 255, 255)), dilate_iter=2, erode_iter=3, apply_mask=True, rescale=True, save_to_local=True, plot=False)
+    extractor.create_mask(height=720, width=1080, hsv_params=((0, 51, 0), (179, 255, 255)), dilate_iter=3, dilate_ker=3,
+                          erode_iter=3, erode_ker=6, apply_mask=True, rescale=True, save_to_local=True, plot=False)
 
     # reconstruct (3)
     colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR)
