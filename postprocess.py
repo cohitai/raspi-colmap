@@ -15,14 +15,17 @@ blob_service_client_2 = BlobServiceClient.from_connection_string(connect_str)
 
 
 class FlushAzure:
-    def __init__(self, pcd_dir, container_name):
+    def __init__(self, pcd_dir, sparse_dir, db_path, container_name):
         self.pcd_dir = pcd_dir
+        self.sparse_dir = sparse_dir
         self.container_name = container_name
+        self.db = db_path
 
     def flush(self):
 
         # Relevant files
-        files = glob(self.pcd_dir + '/' + '*.ply')
+        files = glob(self.pcd_dir + '/' + '*.ply') + glob(self.sparse_dir + '/' + "*.txt") + glob(self.sparse_dir + '/'
+                                                                                                  + "*.ini") + [self.db]
 
         # Create container
         try:
@@ -33,7 +36,6 @@ class FlushAzure:
             self.container_name = self.container_name + "-" + timestamp
             logging.info(f"Container new name: {self.container_name}.")
             container_client = blob_service_client_2.create_container(self.container_name)
-
 
         # Create access policy
         access_policy = AccessPolicy(permission=ContainerSasPermissions(read=True, write=True))

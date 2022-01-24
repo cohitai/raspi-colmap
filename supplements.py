@@ -25,11 +25,11 @@ class PcdOps:
         self.output_inlier_cloud = output_dir + '/dense_inlier.ply'
         self.output_poisson = output_dir + '/poisson.ply'
 
-    def fetch_dense_from_remote(self):
+    def fetch_file_from_remote(self, file):
 
         container_client = blob_service_client_2.get_container_client(self.container_name)
         with open(self.input_dense, "wb") as my_blob:
-            blob_client = container_client.get_blob_client('dense.ply')  # Instantiate a new BlobClient
+            blob_client = container_client.get_blob_client(file)  # Instantiate a new BlobClient
             download_stream = blob_client.download_blob()
             my_blob.write(download_stream.readall())
 

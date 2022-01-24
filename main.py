@@ -15,10 +15,12 @@ logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
 # set local structure
 WORKING_DIRECTORY = os.getcwd()
 DATA_DIR = WORKING_DIRECTORY + "/data"
-RAW_DATA_DIR = DATA_DIR + "/d1"
-MASKED_DATA_DIR = DATA_DIR + "/d2"
-COLMAP_OUTPUT_DIR = DATA_DIR + "/d3"
-SUPP_OUTPUT_DIR = DATA_DIR + "/d4"
+RAW_DATA_DIR = DATA_DIR + "/d1" #raw images input
+MASKED_DATA_DIR = DATA_DIR + "/d2" #images dir (after masking)
+COLMAP_OUTPUT_DIR = DATA_DIR + "/d3" #colmap output dir
+SPARSE_OUTPUT_DIR = COLMAP_OUTPUT_DIR + "/0" #colmap sparse output dir
+SUPP_OUTPUT_DIR = DATA_DIR + "/d4" #Azure containers files
+DB_PATH = COLMAP_OUTPUT_DIR + "/database.db"
 
 
 def main():
@@ -55,17 +57,23 @@ def main():
 
             # upload to azure
             logging.info("Upload to Azure:")
-            flusher = FlushAzure(COLMAP_OUTPUT_DIR, container_name)
+            flusher = FlushAzure(COLMAP_OUTPUT_DIR, SPARSE_OUTPUT_DIR, DB_PATH, container_name)
             flusher.flush()
 
             # download dense.ply to local and apply post-operations (4)
             logging.info("Post-process with open3d")
-            PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_dense_from_remote()
+            PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_file_from_remote('dense.ply')
             PcdOps(SUPP_OUTPUT_DIR, container_name).reconstruct(outliers=True, poisson=True)
 
             # flush new files to container
             logging.info("Uploading to Azure, poisson and inlier point cloud.")
             flusher.flush_from([SUPP_OUTPUT_DIR + "/" + "dense_inlier.ply", SUPP_OUTPUT_DIR + "/" + "poisson.ply"])
+
+            # fetch sparse_dir files
+            PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_file_from_remote('cameras.txt')
+            PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_file_from_remote('images.txt')
+            PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_file_from_remote('points3D.txt')
+            PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_file_from_remote('project.ini')
 
             # go to pause
             logging.info("Going to sleep..")
