@@ -7,6 +7,10 @@ from pathlib import Path
 
 
 class DockerizedColmap:
+
+    # container image:
+    # CONTAINER_IMAGE = "colmap/colmap:latest"
+
     # container's inner directory structure.
     DATASET_PATH = "/root/data"
     DATABASE_PATH = "/root/data/output/database.db"
@@ -17,12 +21,13 @@ class DockerizedColmap:
     DENSE_PATH = "/root/data/output"
     DENSE_PLY_PATH = "/root/data/output/dense.ply"
 
-    def __init__(self, local_dir, masked_dir, output_dir):
+    def __init__(self, local_dir, masked_dir, output_dir, container_image):
 
         self.local_dir = local_dir
         self.masked_dir = masked_dir
         self.output_dir = output_dir
         self.input_dense = output_dir + '/dense.ply'
+        self.container_image = container_image
 
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -65,14 +70,14 @@ class DockerizedColmap:
         colmap_cmds = {"feature_extractor": cmd1, "exhaustive_matcher": cmd2, "mapper": cmd3, "image_undistorter": cmd4,
                        "patch_match_stereo": cmd5, "stereo_fusion": cmd6, "model_converter": cmd7}
 
-        self._run_colmap(client, colmap_cmds, mount_dict, self.DATASET_PATH)
+        self._run_colmap(client, colmap_cmds, mount_dict, self.DATASET_PATH, self.container_image)
 
     @staticmethod
-    def _run_colmap(client, cmd_dict, mount_dict, wd):
+    def _run_colmap(client, cmd_dict, mount_dict, wd, container_image):
         """ dockerized COLMAP"""
 
-        def _execute_colmap_command(cl, cmd, mount_dict, wd, container_name='colmap/colmap:latest'):
-            return cl.containers.run(container_name, cmd, volumes=mount_dict, working_dir=wd, runtime="nvidia",
+        def _execute_colmap_command(cl, cmd, mount_dict, wd, container_image=container_image):
+            return cl.containers.run(container_image, cmd, volumes=mount_dict, working_dir=wd, runtime="nvidia",
                                      detach=False, auto_remove=True)
 
         for colmap_command, command in cmd_dict.items():
