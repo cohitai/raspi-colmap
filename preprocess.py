@@ -260,7 +260,8 @@ class MaskAzure:
 
         return result_dict
 
-    def create_mask(self, height, width, hsv_params=((0, 51, 0), (179, 255, 255)), dilate_iter=2, dilate_ker=3, erode_iter=3, erode_ker=3, apply_mask=False, save_to_local=False, rescale=False, plot=False):
+    def create_mask(self, height, width, hsv_params=((0, 51, 0), (179, 255, 255)), dilate_iter=2, dilate_ker=3,
+                    erode_iter=3, erode_ker=3, apply_mask=False, save_to_local=False, rescale=False, plot=False):
 
         def _pad(img, h, w):
             #  in case when you have odd number

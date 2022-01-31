@@ -27,7 +27,6 @@ def main():
 
     parser = argparse.ArgumentParser(description="Raspi colmap 3D reconstruction.")
     parser.add_argument("-A", "--automate", help="automate server by time", default=10000, type=int)
-    parser.add_argument("-M", "--mask", help="mask parameters", type=int, default=10000)
 
     args = parser.parse_args()
 
@@ -65,7 +64,7 @@ def main():
             PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_file_from_remote('dense.ply')
             PcdOps(SUPP_OUTPUT_DIR, container_name).reconstruct(outliers=True, poisson=True)
 
-            # flush new files to container
+            # flush post- processed files to the Azure container.
             logging.info("Uploading to Azure, poisson and inlier point cloud.")
             flusher.flush_from([SUPP_OUTPUT_DIR + "/" + "dense_inlier.ply", SUPP_OUTPUT_DIR + "/" + "poisson.ply"])
 
