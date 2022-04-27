@@ -27,7 +27,6 @@ def main():
 
     parser = argparse.ArgumentParser(description="Raspi colmap 3D reconstruction.")
     parser.add_argument("-A", "--automate", help="automate server by time", default=10000, type=int)
-
     args = parser.parse_args()
 
     if args.automate:
@@ -43,6 +42,7 @@ def main():
             logging.info("Extracting data from Azure.")
             container_name = extractor.fetch_last_container()
             # debug_container=["1639656186-281117"]
+
             # apply mask and save to local (2)
             logging.info("Applying Mask on data")
             extractor.create_mask(height=720, width=1080, hsv_params=((0, 51, 0), (179, 255, 255)), dilate_iter=3,
@@ -80,4 +80,36 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
+
+    # preprocess (1)
+    logging.info("STARTING AUTOMATION:")
+    extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, SUPP_OUTPUT_DIR)
+    # clean the working directory
+    logging.info("Clean the workspace.")
+    extractor.init()
+
+    # dl last container to local
+    logging.info("Extracting data from Azure.")
+    container_name = extractor.fetch_last_container()
+
+    # apply mask and save to local (2)
+    logging.info("Applying Mask on data")
+
+    mask_kwargs = {"height": 720,
+                   "width": 1080,
+                   "hsv_params": ((0, 50, 0), (179, 255, 255)),
+                   "dilate_iter": 0,
+                   "dilate_ker": 2,
+                   "erode_iter": 10,
+                   "erode_ker": 4,
+                   "apply_mask": True,
+                   "rescale": True,
+                   "save_to_local": True,
+                   "plot": False
+                   }
+
+    extractor.create_mask(**mask_kwargs)
+
+
+

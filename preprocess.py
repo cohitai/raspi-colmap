@@ -38,7 +38,7 @@ class MaskAzure:
         self.supp_dir = supp_dir
 
     def init(self):
-        """method for initializing the workspace"""
+        """method for initializing the working-space"""
         if os.path.exists(self.local_dir):
             shutil.rmtree(self.local_dir)
         os.makedirs(self.local_dir)
@@ -62,6 +62,7 @@ class MaskAzure:
         container = debug_container if debug_container else self.retrieve_last_k_containers(1)
         self.dl_blobs_to_local(container)
 
+        logging.info(f"current container's stamp: {container[0]}")
         return container[0]  # return last container's name
 
     @staticmethod
@@ -72,7 +73,7 @@ class MaskAzure:
             if i == k:
                 break
             timestamp = datetime.fromtimestamp(int(item["name"].split("-")[0]))
-            logging.debug(f"container downloaded with timestamp: {timestamp} ")
+            logging.info(f"container downloaded with timestamp: {timestamp} ")
             container_list.append(item["name"])
         return container_list
 
@@ -128,28 +129,67 @@ class MaskAzure:
         """computes crop parameters for blobs in blob2crop.
            :param: blob2crop a dictionary resulted from organize_container (giving info on container and blobs); """
 
-        def _compute_diffs(im1, im2, im3):
-            """auxiliary function to subtract images using opencv."""
+        class Crop(object):
+            def __init__(self, d_img):
 
-            return [cv2.subtract(im2, im1), cv2.subtract(im3, im2)]
+                self.d_img = d_img
+                self.params = {"horizontal_safe": 100,
+                               "vertical_safe": 130,
+                               "horizontal_zeros_num": 50,
+                               "vertical_zeros_num": 30
+                               }
 
-        def _find_crop_indices(img_diff):
-            """auxiliary function to compute crop indices by detecting moving objects in the frames"""
+            def compute_crop_indices(self):
 
-            def _derivative(series, interval=1):
-                """derivative of a numpy array"""
-                diff = list()
-                for i in range(len(series)):
-                    value = series[i] - series[i - interval]
-                    diff.append(value)
-                return np.array(diff)
+                """returns a dictionary of crop indices by axis"""
 
-            def _find_turning_pts(series, z_interval, vertical=False):
+                # unpack parameters
+                horizontal_safe = self.params["horizontal_safe"]
+                vertical_safe = self.params["vertical_safe"]
+                horizontal_zeros_num = self.params["horizontal_zeros_num"]
+                vertical_zeros_num = self.params["vertical_zeros_num"]
+                # dictionary init
+                crop_interval = {}
+
+                # reduce img to vertical mean vector
+                d_img_h = self.d_img.mean(axis=0)
+                d_img_v = self.d_img.mean(axis=1)
+
+                # compute median for clipping
+                median_h = (d_img_h.max() - d_img_h.min()) / 2
+                median_v = (d_img_v.max() - d_img_v.min()) / 2
+
+                # clipper
+                clipper_h = lambda t: 0 if t - median_h / 2 < 0 else t
+                clipper_v = lambda t: 0 if t - median_v / 2 < 0 else t
+
+                # apply clipper
+                d_img_h_clipped = np.array([clipper_h(t) for t in d_img_h])
+                d_img_v_clipped = np.array([clipper_v(t) for t in d_img_v])
+
+                # find suspected points for the main objects' boundaries
+                right_h, left_h = self._compute_turning_pts(abs(self._derivative(d_img_h_clipped)),
+                                                            horizontal_zeros_num, vertical=False)
+                right_v, left_v = self._compute_turning_pts(abs(self._derivative(d_img_v_clipped)), vertical_zeros_num,
+                                                            vertical=True)
+
+                # bug (avoid when crop index is too large)
+                right_v = 0 if right_v > len(d_img_h_clipped) / 3 else right_v
+
+                # adding safety interval to the final result
+                crop_interval[0] = (
+                max(0, right_h - horizontal_safe), min(len(d_img_h_clipped), left_h + horizontal_safe))
+                crop_interval[1] = (max(0, right_v - vertical_safe), min(len(d_img_v_clipped), left_v + vertical_safe))
+
+                return crop_interval
+
+            @staticmethod
+            def _compute_turning_pts(series, Z_interval, vertical=False):
 
                 """function searches for left/right jumping points in M,
-                    :param: interval is an integer representing a sequel of
-                    zeros which should come to the left/right of the suspected
-                    point. """
+                :param: interval is an integer representing a sequel of
+                zeros which should come to the left/right of the suspected
+                point. """
 
                 def _argmax(lst):
                     """returns index of maximum element from tuples list by second coordinate. """
@@ -158,6 +198,8 @@ class MaskAzure:
 
                 def _calculate_zeroes(pt, series):
                     """returns actual amount if zeroes before/after the <pt> in <series> """
+                    zeroes_left = 0
+                    zeroes_right = 0
 
                     i = 1
                     while (pt - i) >= 0 and series[pt - i] == 0:
@@ -175,66 +217,48 @@ class MaskAzure:
                 right = []
 
                 # checks if t is a left jumping point.
-                for t in range(z_interval, len(series)):
+                for t in range(Z_interval, len(series)):
                     if series[t] != 0:
-                        for j in range(1, z_interval + 1):
+                        for j in range(1, Z_interval + 1):
                             if series[t - j] != 0:
                                 break
-                        if j == z_interval and series[t - z_interval] == 0:
+                        if j == Z_interval and series[t - Z_interval] == 0:
                             left.append((t, _calculate_zeroes(t, series)[0]))
 
                 # checks if t is a right jumping point.
-                for t in range(1, len(series) - z_interval):
+                for t in range(1, len(series) - Z_interval):
                     if series[t] != 0:
-                        for j in range(1, z_interval + 1):
+                        for j in range(1, Z_interval + 1):
                             if series[t + j] != 0:
                                 break
-                        if j == z_interval and series[t + z_interval] == 0:
+                        if j == Z_interval and series[t + Z_interval] == 0:
                             right.append((t, _calculate_zeroes(t, series)[1]))
 
-                if vertical:
-                    return left[0][0], right[-1][0]
-
+                # in the vertical we simply take the first occuntered jump-points in both sides.
+                # print("debug:",left,right)
+                try:
+                    if vertical:
+                        return left[0][0], right[-1][0]
+                except IndexError:
+                    return left[0][0], len(series)
+                # in the horizontal we pick the points which comes after the largest zeroes interval.
                 return left[_argmax(left)][0], right[_argmax(right)][0]
 
-            ###
+            @staticmethod
+            def _derivative(series, interval=1):
 
-            # safety intervel to be added
-            M_horizontal_safe, M_vertical_safe = 100, 130
-            # number_of_zeros parameters which should come before/after a jumping point
-            IZ_h, IZ_v = 50, 20
+                """ series derivative auxiliary """
 
-            # dictionary init
-            crop_interval = {}
+                diff = list()
+                for i in range(len(series)):
+                    value = series[i] - series[i - interval]
+                    diff.append(value)
+                return np.array(diff)
 
-            # reduce img to vertical mean vector
-            M_horizontal = img_diff.mean(axis=0)
-            M_vertical = img_diff.mean(axis=1)
+        def _compute_diffs(im1, im2, im3):
+            """auxiliary function to subtract images using opencv."""
 
-            # compute median for clipping
-            horizontal_median = (M_horizontal.max() - M_horizontal.min()) / 2
-            vertical_median = (M_vertical.max() - M_vertical.min()) / 2
-
-            # clipper
-            horizontal_clip = lambda t: 0 if t - horizontal_median / 2 < 0 else t
-            vertical_clip = lambda t: 0 if t - vertical_median / 2 < 0 else t
-
-            # apply clipper
-            M_horizontal_mod = np.array([horizontal_clip(t) for t in M_horizontal])
-            M_vertical_mod = np.array([vertical_clip(t) for t in M_vertical])
-
-            # find suspected points for the main objects' boundaries
-            right_h, left_h = _find_turning_pts(abs(_derivative(M_horizontal_mod)), IZ_h, vertical=False)
-            right_v, left_v = _find_turning_pts(abs(_derivative(M_vertical_mod)), IZ_v, vertical=True)
-
-            # bug
-            right_v = 0 if right_v > len(M_vertical) / 4 else right_v
-
-            # adding safety interval to the final result
-            crop_interval[0] = (max(0, right_h - M_horizontal_safe), min(len(M_horizontal_mod), left_h + M_horizontal_safe))
-            crop_interval[1] = (max(0, right_v - M_vertical_safe), min(len(M_vertical_mod), left_v + M_vertical_safe))
-
-            return crop_interval
+            return [cv2.subtract(im2, im1), cv2.subtract(im3, im2)]
 
         cameras = list(blob2crop.keys())
         result_dict = {}
@@ -248,10 +272,13 @@ class MaskAzure:
                 diff_ind = list(np.argsort([abs(x - ind) for x in [x for x in range(len(grey))]])[:3])
                 d_im1, d_im2 = _compute_diffs(grey[diff_ind[1]], grey[diff_ind[0]], grey[diff_ind[2]])
 
-                hl1, hr1 = _find_crop_indices(d_im1)[0]
-                hl2, hr2 = _find_crop_indices(d_im2)[0]
-                vl1, vr1 = _find_crop_indices(d_im1)[1]
-                vl2, vr2 = _find_crop_indices(d_im2)[1]
+                cropping_inds = Crop(d_im1).compute_crop_indices()
+                hl1, hr1 = cropping_inds[0]
+                vl1, vr1 = cropping_inds[1]
+
+                cropping_inds = Crop(d_im2).compute_crop_indices()
+                hl2, hr2 = cropping_inds[0]
+                vl2, vr2 = cropping_inds[1]
 
                 hlc, hrc = min(hl1, hl2), max(hr1, hr2)
                 vlc, vrc = min(vl1, vl2), max(vr1, vr2)
