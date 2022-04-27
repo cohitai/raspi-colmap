@@ -111,5 +111,10 @@ if __name__ == '__main__':
 
     extractor.create_mask(**mask_kwargs)
 
+    # reconstruct (3)
+    logging.info("COLMAP reconstruction:")
+    colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, "colmap/colmap:latest")
+    colmap_client.reconstruct()
+
 
 
