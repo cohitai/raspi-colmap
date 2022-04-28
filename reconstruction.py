@@ -72,15 +72,20 @@ class DockerizedColmap:
             --image_path {self.IMAGE_PATH} \
             --output_path {self.OUTPUT_PATH}"
 
-        mapper_cmd = f'''
-                colmap mapper \
+        mapper_cmd = f'''colmap mapper \
                     --database_path={self.DATABASE_PATH} \
                     --image_path={self.IMAGE_PATH} \
-                    --output_path={self.SPARSE_PATH}'''
+                    --output_path={self.NEW_SPARSE_PATH}'''
 
         cmd4 = f"colmap image_undistorter \
             --image_path {self.IMAGE_PATH} \
             --input_path {self.SPARSE_PATH} \
+            --output_path {self.DENSE_PATH} \
+            --output_type COLMAP"
+
+        undistorter_cmd = f"colmap image_undistorter \
+            --image_path {self.IMAGE_PATH} \
+            --input_path {self.NEW_SPARSE_PATH+'/0'} \
             --output_path {self.DENSE_PATH} \
             --output_type COLMAP"
 
@@ -94,12 +99,20 @@ class DockerizedColmap:
             --input_type geometric \
             --output_path {self.DENSE_PLY_PATH}"
         cmd7 = f"colmap model_converter \
-                    --input_path {self.SPARSE_PATH} \
-                    --output_path {self.SPARSE_PATH} \
+                    --input_path {self.NEW_SPARSE_PATH} \
+                    --output_path {self.NEW_SPARSE_PATH} \
                     --output_type TXT"
 
-        colmap_cmds = {"feature_extractor": cmd1, "exhaustive_matcher": cmd2, "mapper": cmd3, "image_undistorter": cmd4,
-                       "patch_match_stereo": cmd5, "stereo_fusion": cmd6, "model_converter": cmd7}
+        model_converter_cmd = f"colmap model_converter \
+                            --input_path {self.NEW_SPARSE_PATH} \
+                            --output_path {self.NEW_SPARSE_PATH} \
+                            --output_type TXT"
+
+        #colmap_cmds = {"feature_extractor": cmd1, "exhaustive_matcher": cmd2, "mapper": cmd3, "image_undistorter": cmd4,
+        #               "patch_match_stereo": cmd5, "stereo_fusion": cmd6, "model_converter": cmd7}
+
+        colmap_cmds = {"feature_extractor": feature_extractor_cmd, "exhaustive_matcher": exhaustive_matcher_cmd, "mapper": mapper_cmd, "image_undistorter": undistorter_cmd,
+                       "patch_match_stereo": cmd5, "stereo_fusion": cmd6, "model_converter": model_converter_cmd}
 
         self._run_colmap(client, colmap_cmds, mount_dict, self.DATASET_PATH, self.container_image)
 

@@ -50,7 +50,8 @@ class MaskAzure:
         if os.path.exists(self.output_dir):
             subprocess.Popen(['sudo', '-S', 'rm', "-r", self.output_dir], stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate(input=SERVER_PWD)
-        os.makedirs(self.output_dir)
+        os.makedirs(self.output_dir)  # colmaps database location.
+        os.makedirs(self.output_dir+"/sparse")  # .bin files location.
 
         if os.path.exists(self.supp_dir):
             shutil.rmtree(self.supp_dir)
