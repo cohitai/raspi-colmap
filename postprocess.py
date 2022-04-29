@@ -26,7 +26,6 @@ class FlushAzure:
         # Relevant files
         files = glob(self.pcd_dir + '/' + '*.ply') + glob(self.sparse_dir + '/' + "*.txt") + glob(self.sparse_dir + '/'
                                                                                                   + "*.ini") + [self.db]
-
         # Create container
         try:
             container_client = blob_service_client_2.create_container(self.container_name)

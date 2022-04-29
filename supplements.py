@@ -29,9 +29,12 @@ class PcdOps:
 
         container_client = blob_service_client_2.get_container_client(self.container_name)
         with open(self.input_dense, "wb") as my_blob:
-            blob_client = container_client.get_blob_client(file)  # Instantiate a new BlobClient
-            download_stream = blob_client.download_blob()
-            my_blob.write(download_stream.readall())
+            blob_client = container_client.get_blob_client(file)  # Instantiate BlobClient
+            try:
+                download_stream = blob_client.download_blob()
+                my_blob.write(download_stream.readall())
+            except Exception:
+                return
 
     def reconstruct(self, outliers=False, poisson=False):
 
