@@ -8,3 +8,4 @@ data/
 .ipynb_checkpoints/
 a.out
 /aux_mask_trackbar.py
+/nohup.out

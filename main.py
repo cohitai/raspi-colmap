@@ -8,26 +8,40 @@ import logging
 import sys
 import os
 
-# create logger for 'raspi-colmap'
-logging.getLogger('raspi-colmap')
-logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
 
 # set local structure
 WORKING_DIRECTORY = os.getcwd()
-DATA_DIR = WORKING_DIRECTORY + "/data"
-RAW_DATA_DIR = DATA_DIR + "/d1"  # raw images input
-MASKED_DATA_DIR = DATA_DIR + "/d2"  # images dir (after masking)
-COLMAP_OUTPUT_DIR = DATA_DIR + "/d3"  # colmap output dir
-SPARSE_OUTPUT_DIR = COLMAP_OUTPUT_DIR + "/sparse/0"   # colmap sparse output dir
-SUPP_OUTPUT_DIR = DATA_DIR + "/d4"  # Azure containers files
-DB_PATH = COLMAP_OUTPUT_DIR + "/database.db"
+DATA_DIR = os.path.join(WORKING_DIRECTORY, "data")
+RAW_DATA_DIR = os.path.join(DATA_DIR, "d1")  # raw images input
+MASKED_DATA_DIR = os.path.join(DATA_DIR, "d2")  # images dir (after masking)
+COLMAP_OUTPUT_DIR = os.path.join(DATA_DIR, "d3")  # colmap output dir
+SPARSE_OUTPUT_DIR = os.path.join(COLMAP_OUTPUT_DIR, "sparse/0")   # colmap sparse output dir
+SUPP_OUTPUT_DIR = os.path.join(DATA_DIR, "d4")  # Azure containers files
+DB_PATH = os.path.join(COLMAP_OUTPUT_DIR, "database.db")
+
+
+# create logger
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
+                    handlers=[logging.StreamHandler(sys.stdout)],
+                    level=logging.DEBUG)
+
+logging.getLogger('raspi-config')
 
 
 def main():
 
     parser = argparse.ArgumentParser(description="Raspi colmap 3D reconstruction.")
     parser.add_argument("-A", "--automate", help="automate server by time", default=10000, type=int)
+    parser.add_argument("-D", "--debug", help="debug mode", default=False, type=bool)
     args = parser.parse_args()
+
+    debug_kwargs = {"container_name": None,
+                    "extract_images": False,
+                    "compute_mask": False,
+                    "compute_reconstruction": False,
+                    "upload_to_azure": False,
+                    "compute_postprocessor": False
+                    }
 
     if args.automate:
         while True:
@@ -38,10 +52,11 @@ def main():
             # clean the working directory
             logging.info("Clean the workspace.")
             extractor.init()
+
             # dl last container to local
             logging.info("Extracting data from Azure.")
+            # container_name = ["1651357151-954354"]
             container_name = extractor.fetch_last_container()
-            ##container_name = "1651152698-113137"
 
             # apply mask and save to local (2)
             logging.info("Applying Mask on data")
@@ -76,7 +91,8 @@ def main():
 
             # upload files to Azure container.
             logging.info("Uploading to Azure, poisson and inlier point cloud.")
-            flusher.flush_from([SUPP_OUTPUT_DIR + "/" + "dense_inlier.ply", SUPP_OUTPUT_DIR + "/" + "poisson.ply"])
+            flusher.flush_from([os.path.join(SUPP_OUTPUT_DIR, "dense_inlier.ply"),
+                                os.path.join(SUPP_OUTPUT_DIR, "poisson.ply")])
 
             # fetch sparse_dir files
             PcdOps(SUPP_OUTPUT_DIR, container_name).fetch_file_from_remote('cameras.txt')

@@ -24,8 +24,11 @@ class FlushAzure:
     def flush(self):
 
         # Relevant files
-        files = glob(self.pcd_dir + '/' + '*.ply') + glob(self.sparse_dir + '/' + "*.txt") + glob(self.sparse_dir + '/'
-                                                                                                  + "*.ini") + [self.db]
+        files = glob(os.path.join(self.pcd_dir, '*.ply')) \
+                + glob(os.path.join(self.sparse_dir, "*.txt")) \
+                + glob(os.path.join(self.sparse_dir, "*.ini")) \
+                + [self.db]
+
         # Create container
         try:
             container_client = blob_service_client_2.create_container(self.container_name)

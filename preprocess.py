@@ -90,15 +90,25 @@ class MaskAzure:
                 my_blob.write(download_stream.readall())
 
         for container in container_list:
-            dir_name = self.local_dir + "/" + container
+            dir_name = os.path.join(self.local_dir, container)
             try:
                 os.makedirs(dir_name)
             except FileExistsError:
                 continue
 
-            container_client = blob_service_client_1.get_container_client(container)
-            for blob in container_client.list_blobs():
-                _save_blob(blob.name, dir_name, container_client)
+            err_count = 0
+            while len(os.listdir(dir_name)) == 0:
+
+                container_client = blob_service_client_1.get_container_client(container)
+                blob_2_dl_list = container_client.list_blobs()
+
+                for blob in blob_2_dl_list:
+                    _save_blob(blob.name, dir_name, container_client)
+
+                # bug fix - bad fetches
+                err_count += 1
+                if err_count == 10:
+                    raise ConnectionError('container could not be fetched.')
 
     @staticmethod
     def organize_container(container_path):
