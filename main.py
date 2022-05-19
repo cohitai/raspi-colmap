@@ -31,8 +31,10 @@ logging.getLogger('raspi-config')
 def main():
 
     parser = argparse.ArgumentParser(description="Raspi colmap 3D reconstruction.")
-    parser.add_argument("-A", "--automate", help="automate server by time", default=10000, type=int)
+    parser.add_argument("-A", "--automate", help="automate server by time", default=False, type=bool)
+    parser.add_argument("-C", "--costume", help="costume run", default='', type=str)
     parser.add_argument("-D", "--debug", help="debug mode", default=False, type=bool)
+    parser.add_argument("-T", "--sleeptime", help="servers sleeping time", default=10000, type=int)
     args = parser.parse_args()
 
     debug_kwargs = {"container_name": None,
@@ -75,9 +77,18 @@ def main():
             extractor.create_mask(**mask_kwargs)
 
             # reconstruct (3)
+
+            colmap_kargs = {"feature_extractor": True,
+                            "exhaustive_matcher": True,
+                            "mapper": True,
+                            "image_undistorter": True,
+                            "patch_match_stereo": True,
+                            "stereo_fusion": True,
+                            "model_converter": True}
+
             logging.info("COLMAP reconstruction:")
             colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, "colmap/colmap:latest")
-            colmap_client.reconstruct()
+            colmap_client.reconstruct(**colmap_kargs)
 
             # upload to azure
             logging.info("Upload to Azure:")
@@ -102,7 +113,51 @@ def main():
 
             # go to pause
             logging.info("Going to sleep..")
-            time.sleep(args.automate)
+            time.sleep(args.sleeptime)
+
+    if args.costume:
+        logging.info(f"Begin the Customized Run.")
+        logging.info(f"Container Name: {args.costume}")
+
+        # preprocess (1)
+        extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, SUPP_OUTPUT_DIR)
+
+        # 1.1 clean the working directory
+        logging.info("Clean the workspace.")
+        extractor.init()
+
+        # 1.2 dl last container to local
+        logging.info("Extracting data from Azure.")
+        extractor.fetch_last_container([args.costume])
+
+        # apply mask and save to local (2)
+        logging.info("Applying Mask on data")
+        mask_kwargs = {"height": 720,
+                       "width": 1080,
+                       "hsv_params": ((0, 50, 0), (179, 255, 255)),
+                       "dilate_iter": 0,
+                       "dilate_ker": 2,
+                       "erode_iter": 10,
+                       "erode_ker": 4,
+                       "apply_mask": True,
+                       "rescale": True,
+                       "save_to_local": True,
+                       "plot": False
+                       }
+        extractor.create_mask(**mask_kwargs)
+
+    # reconstruct (3)
+    # colmap session configuration
+    colmap_kargs = {"feature_extractor": True,
+                    "exhaustive_matcher": True,
+                    "mapper": True,
+                    "image_undistorter": False,
+                    "patch_match_stereo": False,
+                    "stereo_fusion": False,
+                    "model_converter": True}
+    logging.info("COLMAP reconstruction:")
+    colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, "colmap/colmap:latest")
+    colmap_client.reconstruct(**colmap_kargs)
 
 
 if __name__ == '__main__':

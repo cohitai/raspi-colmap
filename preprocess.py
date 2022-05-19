@@ -58,7 +58,8 @@ class MaskAzure:
         os.makedirs(self.supp_dir)
 
     def fetch_last_container(self, debug_container=None):
-        """method to download last container """
+        """method to download last container
+         :param debug_container, a list."""
 
         container = debug_container if debug_container else self.retrieve_last_k_containers(1)
         self.dl_blobs_to_local(container)
@@ -251,7 +252,11 @@ class MaskAzure:
                     if vertical:
                         return left[0][0], right[-1][0]
                 except IndexError:
-                    return left[0][0], len(series)
+                    try:
+                        return left[0][0], len(series)
+                    except IndexError:
+                        return 0, len(series)
+
                 # in the horizontal we pick the points which comes after the largest zeroes interval.
                 return left[_argmax(left)][0], right[_argmax(right)][0]
 

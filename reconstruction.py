@@ -31,7 +31,7 @@ class DockerizedColmap:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-    def reconstruct(self):
+    def reconstruct(self, **colmap_kargs):
         """ COLMAP in docker """
 
         client = docker.from_env()  # connect to docker daemon
@@ -89,13 +89,14 @@ class DockerizedColmap:
                             --output_type TXT"
 
         colmap_cmds = {"feature_extractor": feature_extractor_cmd, "exhaustive_matcher": exhaustive_matcher_cmd,
-                       "mapper": mapper_cmd, "image_undistorter": undistorter_cmd,"model_converter": model_converter_cmd,
-                       "patch_match_stereo": patch_match_stereo_cmd, "stereo_fusion": stereo_fusion_cmd}
+                       "mapper": mapper_cmd, "image_undistorter": undistorter_cmd,
+                       "model_converter": model_converter_cmd, "patch_match_stereo": patch_match_stereo_cmd,
+                       "stereo_fusion": stereo_fusion_cmd}
 
-        self._run_colmap(client, colmap_cmds, mount_dict, self.DATASET_PATH, self.container_image)
+        self._run_colmap(client, colmap_cmds, mount_dict, self.DATASET_PATH, self.container_image, **colmap_kargs)
 
     @staticmethod
-    def _run_colmap(client, cmd_dict, mount_dict, wd, container_image):
+    def _run_colmap(client, cmd_dict, mount_dict, wd, container_image, **colmap_kargs):
         """ dockerized COLMAP"""
 
         def _execute_colmap_command(cl, cmd, mount_dict, wd, container_image=container_image):
@@ -103,5 +104,6 @@ class DockerizedColmap:
                                      detach=False, auto_remove=True)
 
         for colmap_command, command in cmd_dict.items():
-            logging.info(f"executing colmap: {colmap_command}")
-            _execute_colmap_command(client, command, mount_dict, wd)
+            if colmap_kargs[colmap_command]:
+                logging.info(f"executing colmap: {colmap_command}")
+                _execute_colmap_command(client, command, mount_dict, wd)
