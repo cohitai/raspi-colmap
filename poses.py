@@ -1,13 +1,14 @@
-import numpy as np #kernel = tf2
+# Jupyter kernel: tf2
 import os
 import imageio
-import open3d as o3d
 
-#llff poses library for COLMAP
-import sys
+# LLFF poses library for COLMAP
 import collections
 import numpy as np
 import struct
+
+
+# Code for extracting the poses into an npy file from COLMAP's output.
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])
@@ -503,7 +504,3 @@ class Poses:
         print("bds:", bds.shape)
 
         return imgs, focal, poses_np, bds
-
-
-Poses("/home/liteandfog/raspi-colmap/data/d3/", "/home/liteandfog/raspi-colmap/data/d2/1651554290-358453").run()
-

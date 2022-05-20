@@ -2,6 +2,7 @@ import time
 import argparse
 from preprocess import MaskAzure
 from reconstruction import DockerizedColmap
+from poses import Poses
 from postprocess import FlushAzure
 from supplements import PcdOps
 import logging
@@ -12,11 +13,11 @@ import os
 # set local structure
 WORKING_DIRECTORY = os.getcwd()
 DATA_DIR = os.path.join(WORKING_DIRECTORY, "data")
-RAW_DATA_DIR = os.path.join(DATA_DIR, "d1")  # raw images input
-MASKED_DATA_DIR = os.path.join(DATA_DIR, "d2")  # images dir (after masking)
-COLMAP_OUTPUT_DIR = os.path.join(DATA_DIR, "d3")  # colmap output dir
+RAW_DATA_DIR = os.path.join(DATA_DIR, "raw")  # raw images input
+COLMAP_OUTPUT_DIR = os.path.join(DATA_DIR, "output")  # colmap output dir
+MASKED_DATA_DIR = os.path.join(COLMAP_OUTPUT_DIR, "images")  # images dir (after masking)
 SPARSE_OUTPUT_DIR = os.path.join(COLMAP_OUTPUT_DIR, "sparse/0")   # colmap sparse output dir
-SUPP_OUTPUT_DIR = os.path.join(DATA_DIR, "d4")  # Azure containers files
+SUPP_OUTPUT_DIR = os.path.join(DATA_DIR, "supplements")  # Azure containers files
 DB_PATH = os.path.join(COLMAP_OUTPUT_DIR, "database.db")
 
 
@@ -35,6 +36,9 @@ def main():
     parser.add_argument("-C", "--costume", help="costume run", default='', type=str)
     parser.add_argument("-D", "--debug", help="debug mode", default=False, type=bool)
     parser.add_argument("-T", "--sleeptime", help="servers sleeping time", default=10000, type=int)
+    parser.add_argument("--black_bkg", help="automate server by time", action='store_true')
+    parser.add_argument("--clean_workspace", help="delete all data directories in the working space",
+                        action='store_true')
     args = parser.parse_args()
 
     debug_kwargs = {"container_name": None,
@@ -45,12 +49,39 @@ def main():
                     "compute_postprocessor": False
                     }
 
+    dirs_kargs = {
+                  "raw_dir": RAW_DATA_DIR,
+                  "output_dir": COLMAP_OUTPUT_DIR,
+                  "images_dir": MASKED_DATA_DIR,
+                  "supp_dir": SUPP_OUTPUT_DIR
+                  }
+
+    mask_kwargs = {"height": 720,
+                   "width": 1080,
+                   "hsv_params": ((0, 50, 0), (179, 255, 255)),
+                   "dilate_iter": 0,
+                   "dilate_ker": 2,
+                   "erode_iter": 10,
+                   "erode_ker": 4,
+                   "apply_mask": True,
+                   "rescale": True,
+                   "save_to_local": True,
+                   "plot": False,
+                   "black_background": args.black_bkg
+                   }
+
+    if args.clean_workspace:
+        extractor = MaskAzure(**dirs_kargs)
+        # clean the working directory
+        logging.info("Clean the workspace.")
+        extractor.init()
+
     if args.automate:
         while True:
 
             # preprocess (1)
             logging.info("STARTING AUTOMATION:")
-            extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, SUPP_OUTPUT_DIR)
+            extractor = MaskAzure(**dirs_kargs)
             # clean the working directory
             logging.info("Clean the workspace.")
             extractor.init()
@@ -62,18 +93,6 @@ def main():
 
             # apply mask and save to local (2)
             logging.info("Applying Mask on data")
-            mask_kwargs = {"height": 720,
-                           "width": 1080,
-                           "hsv_params": ((0, 50, 0), (179, 255, 255)),
-                           "dilate_iter": 0,
-                           "dilate_ker": 2,
-                           "erode_iter": 10,
-                           "erode_ker": 4,
-                           "apply_mask": True,
-                           "rescale": True,
-                           "save_to_local": True,
-                           "plot": False
-                           }
             extractor.create_mask(**mask_kwargs)
 
             # reconstruct (3)
@@ -120,7 +139,7 @@ def main():
         logging.info(f"Container Name: {args.costume}")
 
         # preprocess (1)
-        extractor = MaskAzure(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, SUPP_OUTPUT_DIR)
+        extractor = MaskAzure(**dirs_kargs)
 
         # 1.1 clean the working directory
         logging.info("Clean the workspace.")
@@ -132,32 +151,23 @@ def main():
 
         # apply mask and save to local (2)
         logging.info("Applying Mask on data")
-        mask_kwargs = {"height": 720,
-                       "width": 1080,
-                       "hsv_params": ((0, 50, 0), (179, 255, 255)),
-                       "dilate_iter": 0,
-                       "dilate_ker": 2,
-                       "erode_iter": 10,
-                       "erode_ker": 4,
-                       "apply_mask": True,
-                       "rescale": True,
-                       "save_to_local": True,
-                       "plot": False
-                       }
         extractor.create_mask(**mask_kwargs)
 
-    # reconstruct (3)
-    # colmap session configuration
-    colmap_kargs = {"feature_extractor": True,
+        # reconstruct (3)
+        # colmap session configuration
+        colmap_kargs = {"feature_extractor": True,
                     "exhaustive_matcher": True,
                     "mapper": True,
                     "image_undistorter": False,
                     "patch_match_stereo": False,
                     "stereo_fusion": False,
                     "model_converter": True}
-    logging.info("COLMAP reconstruction:")
-    colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, "colmap/colmap:latest")
-    colmap_client.reconstruct(**colmap_kargs)
+        logging.info("COLMAP reconstruction:")
+        colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, "colmap/colmap:latest")
+        colmap_client.reconstruct(**colmap_kargs)
+
+        # poses extraction (4)
+        Poses(COLMAP_OUTPUT_DIR, MASKED_DATA_DIR).run()
 
 
 if __name__ == '__main__':

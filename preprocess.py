@@ -13,13 +13,8 @@ import subprocess
 from dotenv import load_dotenv
 load_dotenv()  # take environment variables from .env.
 
-# create logger
-# logging.getLogger('raspi-colmap')
-# logging.basicConfig(stream=sys.stdout, filemode='a', level=logging.DEBUG)
-
 SERVER_PWD = bytes(os.getenv('SERVER_PWD'), 'utf-8')
-
-# Azure Storage Account: blobsdb
+# Azure Storage Account: 'blobsdb'
 connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING_1')
 # Create the BlobServiceClient object which will be used to create a container client.
 blob_service_client_1 = BlobServiceClient.from_connection_string(connect_str)
@@ -27,25 +22,21 @@ blob_service_client_1 = BlobServiceClient.from_connection_string(connect_str)
 
 class MaskAzure:
 
-    def __init__(self, local_dir, target_dir, output_dir, supp_dir):
+    def __init__(self, raw_dir, output_dir, images_dir, supp_dir):
         # directory to store raw containers
-        self.local_dir = local_dir
-        # directory to store containers after cropping
-        self.target_dir = target_dir
+        self.raw_dir = raw_dir
         # directory to store colmap output
         self.output_dir = output_dir
+        # directory to store containers after cropping
+        self.images_dir = images_dir
         # directory to store the final output
         self.supp_dir = supp_dir
 
     def init(self):
         """method for initializing the working-space"""
-        if os.path.exists(self.local_dir):
-            shutil.rmtree(self.local_dir)
-        os.makedirs(self.local_dir)
-
-        if os.path.exists(self.target_dir):
-            shutil.rmtree(self.target_dir)
-        os.makedirs(self.target_dir)
+        if os.path.exists(self.raw_dir):
+            shutil.rmtree(self.raw_dir)
+        os.makedirs(self.raw_dir)
 
         if os.path.exists(self.output_dir):
             subprocess.Popen(['sudo', '-S', 'rm', "-r", self.output_dir], stdin=subprocess.PIPE,
@@ -53,23 +44,31 @@ class MaskAzure:
         os.makedirs(self.output_dir)  # colmaps database location.
         os.makedirs(self.output_dir+"/sparse")  # .bin files location.
 
+        if os.path.exists(self.images_dir):
+            shutil.rmtree(self.images_dir)
+        os.makedirs(self.images_dir)
+
         if os.path.exists(self.supp_dir):
             shutil.rmtree(self.supp_dir)
         os.makedirs(self.supp_dir)
 
     def fetch_last_container(self, debug_container=None):
         """method to download last container
-         :param debug_container, a list."""
+         :param debug_container; a list."""
 
         container = debug_container if debug_container else self.retrieve_last_k_containers(1)
-        self.dl_blobs_to_local(container)
+        self.dl_container(container[0])
 
         logging.info(f"current container's stamp: {container[0]}")
         return container[0]  # return last container's name
 
     @staticmethod
     def retrieve_last_k_containers(k):
-        """function retrieves last k containers from Azure Blobs Storage."""
+        # ToDo redundent method. remove it .
+        """function retrieves last k containers from Azure Blobs Storage.
+        :param k; int; number of timestamps to download.
+        :returns a list of time-stamps."""
+
         container_list = []
         for i, item in enumerate(reversed(list(blob_service_client_1.list_containers()))):
             if i == k:
@@ -77,10 +76,11 @@ class MaskAzure:
             timestamp = datetime.fromtimestamp(int(item["name"].split("-")[0]))
             logging.info(f"container downloaded with timestamp: {timestamp} ")
             container_list.append(item["name"])
+
         return container_list
 
-    def dl_blobs_to_local(self, container_list):
-        """method downloads containers from [container_list] to local."""
+    def dl_container(self, container):
+        """method downloads container <container_list> to local."""
 
         def _save_blob(blob_name, container_path, client):
             """auxiliary function: downloads <blob_name> and saves at <container_path>."""
@@ -90,26 +90,12 @@ class MaskAzure:
                 download_stream = blob_client.download_blob()
                 my_blob.write(download_stream.readall())
 
-        for container in container_list:
-            dir_name = os.path.join(self.local_dir, container)
-            try:
-                os.makedirs(dir_name)
-            except FileExistsError:
-                continue
+        dir_name = self.raw_dir
+        container_client = blob_service_client_1.get_container_client(container)
+        blob_2_dl_list = container_client.list_blobs()
 
-            err_count = 0
-            while len(os.listdir(dir_name)) == 0:
-
-                container_client = blob_service_client_1.get_container_client(container)
-                blob_2_dl_list = container_client.list_blobs()
-
-                for blob in blob_2_dl_list:
-                    _save_blob(blob.name, dir_name, container_client)
-
-                # bug fix - bad fetches
-                err_count += 1
-                if err_count == 10:
-                    raise ConnectionError('container could not be fetched.')
+        for blob in blob_2_dl_list:
+            _save_blob(blob.name, dir_name, container_client)
 
     @staticmethod
     def organize_container(container_path):
@@ -304,7 +290,8 @@ class MaskAzure:
         return result_dict
 
     def create_mask(self, height, width, hsv_params=((0, 51, 0), (179, 255, 255)), dilate_iter=2, dilate_ker=3,
-                    erode_iter=3, erode_ker=3, apply_mask=False, save_to_local=False, rescale=False, plot=False):
+                    erode_iter=3, erode_ker=3, apply_mask=False, save_to_local=False, rescale=False, plot=False,
+                    black_background=False):
 
         def _pad(img, h, w):
             #  in case when you have odd number
@@ -315,7 +302,7 @@ class MaskAzure:
             return np.copy(np.pad(img, ((top_pad, bottom_pad), (left_pad, right_pad), (0, 0)), mode='constant',
                                   constant_values=255))
 
-        def _mask_function(img_path, hlc, hrc, vlc, vrc, method='hsv'):
+        def _mask_function(img_path, hlc, hrc, vlc, vrc, black_background=black_background, method='hsv'):
 
             def _erode_function(img, mask, ker, ite):
                 kernel = np.ones((ker, ker), np.uint8)
@@ -354,8 +341,11 @@ class MaskAzure:
             # apply the mask:
             g_img = np.zeros_like(image, np.uint8)
             mask_g = np.zeros_like(image, np.uint8)
-            g_img.fill(255)
+
+            # white or black background
+            g_img.fill(0) if black_background else g_img.fill(0)
             g_img[mask > 0] = image[mask > 0]
+
             mask_g[~mask > 0] = image[~mask > 0]
             mask_g[mask_g != 0] = 255
 
@@ -365,50 +355,42 @@ class MaskAzure:
 
             return g_img, mask, image
 
-        container_list = sorted(glob.glob(self.local_dir + "/*"))
+        d = self.organize_container(self.raw_dir)
 
-        for container_path in container_list:
+        N = int(math.ceil(len([item for sublist in list(d.values()) for item in sublist])) / 4)
+        M = 4
 
-            d = self.organize_container(container_path)
+        dict_w_crop = self.crop_session(d)
 
-            N = int(math.ceil(len([item for sublist in list(d.values()) for item in sublist])) / 4)
-            M = 4
+        if plot:
+            fig, axs = plt.subplots(nrows=N, ncols=M, figsize=(20, 20))
+            fig.suptitle(f'cropping results {self.raw_dir}', fontsize=20, y=1)
 
-            dict_w_crop = self.crop_session(d)
+        for i, j in product(range(N), range(M)):
 
+            try:
+                img_path, crop = dict_w_crop.popitem()
+                hlc, hrc, vlc, vrc = crop
+            except KeyError:
+                continue
+
+            # apply mask: Green HSV,dilate,erode
+            if apply_mask:
+                img, _, _ = _mask_function(img_path, hlc, hrc, vlc, vrc, black_background)
+            else:
+                img = cv2.imread(img_path)[vlc:vrc, hlc:hrc]
+
+            # rescaling image to WxH by padding
+            if rescale:
+                img = _pad(img, h=height, w=width)
+
+            # plotting
             if plot:
-                fig, axs = plt.subplots(nrows=N, ncols=M, figsize=(20, 20))
-                fig.suptitle(f'cropping results {container_path}', fontsize=20, y=1)
+                axs[i, j].set_title(img_path.split("/")[-1])
+                axs[i, j].imshow(img)
 
-            for i, j in product(range(N), range(M)):
-
-                try:
-                    img_path, crop = dict_w_crop.popitem()
-                    hlc, hrc, vlc, vrc = crop
-                except KeyError:
-                    continue
-
-                # apply mask: Green HSV,dilate,erode
-                if apply_mask:
-                    img, _, _ = _mask_function(img_path, hlc, hrc, vlc, vrc)
-                else:
-                    img = cv2.imread(img_path)[vlc:vrc, hlc:hrc]
-
-                # rescaling image to WxH by padding
-                if rescale:
-                    img = _pad(img, h=height, w=width)
-
-                # plotting
-                if plot:
-                    axs[i, j].set_title(img_path.split("/")[-1])
-                    axs[i, j].imshow(img)
-
-                # save to directory
-                if save_to_local:
-
-                    if not os.path.exists(self.target_dir + "/" + img_path.split("/")[-2]): os.makedirs(
-                        self.target_dir + "/" + img_path.split("/")[-2])
-
-                    cv2.imwrite(self.target_dir + "/" + img_path.split("/")[-2] + "/" + img_path.split("/")[-1], img)
-            if plot:
-                plt.show()
+            # save to directory
+            if save_to_local:
+                cv2.imwrite(os.path.join(self.images_dir, img_path.split("/")[-1]), img)
+        if plot:
+            plt.show()
