@@ -295,7 +295,6 @@ class Poses:
         print("Scene bounds:", near, far)
         np.savez_compressed(f'{self.rootdir}/data', images=imgs, poses=poses_np, focal=focal, bds=bds)
 
-
     def extract_poses(self):
 
         points3dfile = os.path.join(self.rootdir, f'sparse/{self.COLMAP_MODEL}/points3D.bin')
@@ -305,12 +304,11 @@ class Poses:
         points = np.stack([p.xyz for p in pts3d.values()])
         cen = np.median(points, axis=0)
         points -= cen
-        dists = (points ** 2).sum(axis=1)
 
         # FIXME: Questionable autoscaling. Adopt method from Noah Snavely
+        # dists = (points ** 2).sum(axis=1)
         # meddist = np.median(dists)
         # points *= 2 * SCALE_PARAM / meddist
-        #
 
         camerasfile = os.path.join(self.rootdir, f'sparse/{self.COLMAP_MODEL}/cameras.bin')
         camdata = read_cameras_binary(camerasfile)
@@ -325,7 +323,7 @@ class Poses:
         imagesfile = os.path.join(self.rootdir, f'sparse/{self.COLMAP_MODEL}/images.bin')
         imdata = read_images_binary(imagesfile)
 
-        w2c_mats = []
+        # w2c_mats = []
 
         bottom = np.array([0, 0, 0, 1.]).reshape([1, 4])
 
@@ -423,9 +421,8 @@ class Poses:
             from subprocess import check_output
 
             # imgdir = os.path.join(basedir, 'images')
-            imgs = [os.path.join(self.imgsdir, f) for f in sorted(os.listdir(self.imgsdir))]
-            imgs = [f for f in imgs if any([f.endswith(ex) for ex in ['JPG', 'jpg', 'png', 'jpeg', 'PNG']])]
-            imgdir_orig = self.imgsdir
+            imgs = [os.path.join(self.imgsdir, f) for f in sorted(os.listdir(self.imgsdir))]  # absolute paths
+            imgs = [f for f in imgs if any([f.endswith(ex) for ex in ['JPG', 'jpg', 'png', 'jpeg', 'PNG']])]  # filtering imgs - redundent
 
             wd = os.getcwd()
 
@@ -435,7 +432,7 @@ class Poses:
 
             try:
                 os.makedirs(imgdir)
-                check_output('cp {}/* {}'.format(imgdir_orig, imgdir), shell=True)
+                check_output('cp {}/* {}'.format(self.imgsdir, imgdir), shell=True)
             except FileExistsError:
                 return
 

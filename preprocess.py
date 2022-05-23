@@ -293,33 +293,35 @@ class MaskAzure:
                     erode_iter=3, erode_ker=3, apply_mask=False, save_to_local=False, rescale=False, plot=False,
                     black_background=False):
 
-        def _pad(img, h, w):
+        def _pad(img, h, w, black):
             #  in case when you have odd number
             top_pad = int(np.floor((h - img.shape[0]) / 2))
             bottom_pad = int(np.ceil((h - img.shape[0]) / 2))
             right_pad = int(np.ceil((w - img.shape[1]) / 2))
             left_pad = int(np.floor((w - img.shape[1]) / 2))
+
+            bkg_value = 0 if black else 255
             return np.copy(np.pad(img, ((top_pad, bottom_pad), (left_pad, right_pad), (0, 0)), mode='constant',
-                                  constant_values=255))
+                                  constant_values=bkg_value))
 
         def _mask_function(img_path, hlc, hrc, vlc, vrc, black_background=black_background, method='hsv'):
 
-            def _erode_function(img, mask, ker, ite):
+            def _erode_function(img, mask, ker, ite, black_bkg):
                 kernel = np.ones((ker, ker), np.uint8)
                 mask_erosion = cv2.erode(mask, kernel, iterations=ite)
                 imask_erosion = mask_erosion == 0
                 g_img = np.zeros_like(img, np.uint8)
-                g_img.fill(255)
+                g_img.fill(0) if black_background else g_img.fill(255)
                 g_img[imask_erosion] = img[imask_erosion]
 
                 return g_img, mask_erosion, img
 
-            def _dilate_function(img, mask, ker, ite):
+            def _dilate_function(img, mask, ker, ite, black_bkg):
                 kernel = np.ones((ker, ker), np.uint8)
                 mask_dilate = cv2.dilate(mask, kernel, iterations=ite)
                 imask_dilate = mask_dilate == 0
                 greened_img = np.zeros_like(img, np.uint8)
-                greened_img.fill(255)
+                greened_img.fill(0) if black_background else greened_img.fill(255)
                 greened_img[imask_dilate] = img[imask_dilate]
 
                 return greened_img, mask_dilate, img
@@ -343,15 +345,15 @@ class MaskAzure:
             mask_g = np.zeros_like(image, np.uint8)
 
             # white or black background
-            g_img.fill(0) if black_background else g_img.fill(0)
+            g_img.fill(0) if black_background else g_img.fill(255)
             g_img[mask > 0] = image[mask > 0]
 
             mask_g[~mask > 0] = image[~mask > 0]
             mask_g[mask_g != 0] = 255
 
             # erosion and dilation
-            g_img, mask, image = _dilate_function(image, mask_g, dilate_ker, dilate_iter)
-            g_img, mask, image = _erode_function(image, mask, erode_ker, erode_iter)
+            g_img, mask, image = _dilate_function(image, mask_g, dilate_ker, dilate_iter, black_background)
+            g_img, mask, image = _erode_function(image, mask, erode_ker, erode_iter, black_background)
 
             return g_img, mask, image
 
@@ -382,7 +384,7 @@ class MaskAzure:
 
             # rescaling image to WxH by padding
             if rescale:
-                img = _pad(img, h=height, w=width)
+                img = _pad(img, h=height, w=width, black=black_background)
 
             # plotting
             if plot:

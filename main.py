@@ -58,10 +58,10 @@ def main():
 
     mask_kwargs = {"height": 720,
                    "width": 1080,
-                   "hsv_params": ((0, 50, 0), (179, 255, 255)),
-                   "dilate_iter": 0,
+                   "hsv_params": ((0, 6, 0), (80, 255, 255)),
+                   "dilate_iter": 1,
                    "dilate_ker": 2,
-                   "erode_iter": 10,
+                   "erode_iter": 5,
                    "erode_ker": 4,
                    "apply_mask": True,
                    "rescale": True,
