@@ -464,7 +464,7 @@ def config_parser():
     parser.add_argument("--basedir", type=str, default='./logs/',
                         help='where to store ckpts and logs')
     parser.add_argument("--datadir", type=str,
-                        default='./data/llff/fern', help='input data directory')
+                        default='../data/output', help='input data directory')
 
     # training options
     parser.add_argument("--netdepth", type=int, default=8,
@@ -582,12 +582,15 @@ def train():
 
     if args.dataset_type == 'llff':
 
-        data = np.load("/home/liteandfog/Desktop/raspi-colmap/data/output/data.npz")
+        data = np.load(os.path.join(args.datadir, "data.npz"))
+        # data = np.load("/home/liteandfog/Desktop/raspi-colmap/data/output/data.npz")
         images, poses, focal, bds = (data["images"], data["poses"], data["focal"], data["bds"])
-
         # Cast intrinsics to right types
         _, H, W, _ = images.shape
         hwf = [int(H), int(W), focal]
+
+        print('Loaded llff', images.shape, hwf, args.datadir)
+
 
         poses = poses[:, :3, :4]
 
@@ -598,10 +601,6 @@ def train():
         images = images.astype('float32')
         focal = focal.astype('float32')
         bds = bds.astype('float32')
-
-
-
-        print('Loaded llff', images.shape, hwf, args.datadir)
 
         print('Auto LLFF holdout,', args.llffhold)
         i_test = np.arange(images.shape[0])[::args.llffhold]
