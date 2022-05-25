@@ -285,14 +285,14 @@ class Poses:
 
     def run(self):
         points, pts3d, perm, poses = self.extract_poses()
-        save_arr = self.save_poses(self.rootdir, poses, pts3d, perm)
-        #bds = self.fetch_min_max_bds(save_arr)
+        self.save_poses(self.rootdir, poses, pts3d, perm)
         imgs, focal, poses_np, bds = self.rescale(8)
 
         # Scene bounds
         near = float(bds.min()) * 1.0
         far = float(bds.max()) * 0.9
         print("Scene bounds:", near, far)
+        # save to local as data.npy
         np.savez_compressed(f'{self.rootdir}/data', images=imgs, poses=poses_np, focal=focal, bds=bds)
 
     def extract_poses(self):

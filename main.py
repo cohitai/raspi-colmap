@@ -1,13 +1,15 @@
 import time
 import argparse
+import logging
+import sys
+import os
+
 from preprocess import MaskAzure
 from reconstruction import DockerizedColmap
 from poses import Poses
 from postprocess import FlushAzure
 from supplements import PcdOps
-import logging
-import sys
-import os
+
 
 
 # set local structure
@@ -172,3 +174,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
