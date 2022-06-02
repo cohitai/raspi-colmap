@@ -417,8 +417,8 @@ def create_nerf(args):
         'raw_noise_std': args.raw_noise_std,
     }
 
-    # NDC only good for LLFF-style forward facing data
-    if args.dataset_type != 'llff' or args.no_ndc:
+    # None Direct Scene
+    if args.no_ndc:
         print('Not ndc!')
         render_kwargs_train['ndc'] = False
         render_kwargs_train['lindisp'] = args.lindisp
@@ -464,7 +464,7 @@ def config_parser():
     parser.add_argument("--basedir", type=str, default='./logs/',
                         help='where to store ckpts and logs')
     parser.add_argument("--datadir", type=str,
-                        default='../data/output', help='input data directory')
+                        default='../data/output', help='location of .npz file')
 
     # training options
     parser.add_argument("--netdepth", type=int, default=8,
@@ -526,20 +526,10 @@ def config_parser():
                         help='downsampling factor to speed up rendering, set 4 or 8 for fast preview')
 
     # dataset options
-    parser.add_argument("--dataset_type", type=str, default='llff',
-                        help='options: llff / blender / deepvoxels')
     parser.add_argument("--testskip", type=int, default=8,
-                        help='will load 1/N images from test/val sets, useful for large datasets like deepvoxels')
-
-    # deepvoxels flags
-    parser.add_argument("--shape", type=str, default='greek',
-                        help='options : armchair / cube / greek / vase')
-
-    # blender flags
+                        help='will load 1/N images from test/val sets')
     parser.add_argument("--white_bkgd", action='store_true',
-                        help='set to render synthetic data on a white bkgd (always use for dvoxels)')
-    parser.add_argument("--half_res", action='store_true',
-                        help='load blender synthetic data at 400x400 instead of 800x800')
+                        help='set to render synthetic data on a white background')
 
     # llff flags
     parser.add_argument("--factor", type=int, default=8,
@@ -572,66 +562,52 @@ def train():
 
     parser = config_parser()
     args = parser.parse_args()
-    
-    #if args.random_seed is not None:
-    #    print('Fixing random seed', args.random_seed)
-    #    np.random.seed(args.random_seed)
-    #    tf.compat.v1.set_random_seed(args.random_seed)
 
     # Load data
+    data = np.load(os.path.join(args.datadir, "data.npz"))
+    images, poses, focal, bds = (data["images"], data["poses"], data["focal"], data["bds"])
+    # Cast intrinsics to right types
+    _, H, W, _ = images.shape
+    hwf = [int(H), int(W), focal]
 
-    if args.dataset_type == 'llff':
+    print('Loaded llff', images.shape, hwf, args.datadir)
 
-        data = np.load(os.path.join(args.datadir, "data.npz"))
-        # data = np.load("/home/liteandfog/Desktop/raspi-colmap/data/output/data.npz")
-        images, poses, focal, bds = (data["images"], data["poses"], data["focal"], data["bds"])
-        # Cast intrinsics to right types
-        _, H, W, _ = images.shape
-        hwf = [int(H), int(W), focal]
+    poses = poses[:, :3, :4]
+    # colmap's coordinates convention
+    poses[:, :3, :3] = np.matmul(poses[:, :3, :3], np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]))
 
-        print('Loaded llff', images.shape, hwf, args.datadir)
+    poses = poses.astype('float32')
+    images = images.astype('float32')
+    focal = focal.astype('float32')
+    bds = bds.astype('float32')
 
+    # train/test split
+    print('Auto LLFF holdout,', args.llffhold)
+    i_test = np.arange(images.shape[0])[::args.llffhold]
 
-        poses = poses[:, :3, :4]
+    i_val = i_test
+    i_train = np.array([i for i in np.arange(int(images.shape[0])) if
+                        (i not in i_test and i not in i_val)])
 
-        # colmap's coordinates convention
-        poses[:, :3, :3] = np.matmul(poses[:, :3, :3], np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]))
+    # Spiral path for rendering
+    render_poses = np.array(poses[i_test])
 
-        poses = poses.astype('float32')
-        images = images.astype('float32')
-        focal = focal.astype('float32')
-        bds = bds.astype('float32')
-
-        print('Auto LLFF holdout,', args.llffhold)
-        i_test = np.arange(images.shape[0])[::args.llffhold]
-
-        i_val = i_test
-        i_train = np.array([i for i in np.arange(int(images.shape[0])) if
-                            (i not in i_test and i not in i_val)])
-
-        # Spiral path for rendering
-        render_poses = np.array(poses[i_test])
-
-        print('DEFINING BOUNDS')
-        if args.no_ndc:
-            near = tf.reduce_min(bds) * .9
-            far = tf.reduce_max(bds) * 1.
-        else:
-            near = 0.
-            far = 1.
-
-        print('NEAR FAR', near, far)
-
+    print('DEFINING BOUNDS')
+    if args.no_ndc:
+        near = tf.reduce_min(bds) * .9
+        far = tf.reduce_max(bds) * 1.
     else:
-        print('Unknown dataset type', args.dataset_type, 'exiting')
-        return
+        near = 0.
+        far = 1.
+
+    print('NEAR FAR', near, far)
 
     # Cast intrinsics to right types
-    H, W, focal = hwf
-    H, W = int(H), int(W)
-    hwf = [H, W, focal]
+    # H, W, focal = hwf
+    # H, W = int(H), int(W)
+    # hwf = [H, W, focal]
 
-    # Create log dir and copy the config file
+    # Create log dir and copy the arg.txt file
     basedir = args.basedir
     expname = args.expname
     os.makedirs(os.path.join(basedir, expname), exist_ok=True)

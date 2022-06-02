@@ -3,13 +3,13 @@ import argparse
 import logging
 import sys
 import os
+from subprocess import check_output
 
 from preprocess import MaskAzure
 from reconstruction import DockerizedColmap
 from poses import Poses
 from postprocess import FlushAzure
 from supplements import PcdOps
-
 
 
 # set local structure
@@ -141,35 +141,42 @@ def main():
         logging.info(f"Container Name: {args.costume}")
 
         # preprocess (1)
-        extractor = MaskAzure(**dirs_kargs)
+        #extractor = MaskAzure(**dirs_kargs)
 
         # 1.1 clean the working directory
-        logging.info("Clean the workspace.")
-        extractor.init()
+        #logging.info("Clean the workspace.")
+        #extractor.init()
 
         # 1.2 dl last container to local
-        logging.info("Extracting data from Azure.")
-        extractor.fetch_last_container([args.costume])
+        #logging.info("Extracting data from Azure.")
+        #extractor.fetch_last_container([args.costume])
 
         # apply mask and save to local (2)
-        logging.info("Applying Mask on data")
-        extractor.create_mask(**mask_kwargs)
+        #logging.info("Applying Mask on data")
+        #extractor.create_mask(**mask_kwargs)
 
         # reconstruct (3)
         # colmap session configuration
-        colmap_kargs = {"feature_extractor": True,
-                    "exhaustive_matcher": True,
-                    "mapper": True,
-                    "image_undistorter": False,
-                    "patch_match_stereo": False,
-                    "stereo_fusion": False,
-                    "model_converter": True}
-        logging.info("COLMAP reconstruction:")
+        colmap_kargs = {"feature_extractor": False,
+                    "exhaustive_matcher": False,
+                    "mapper": False,
+                    "image_undistorter": True,
+                    "patch_match_stereo": True,
+                    "stereo_fusion": True,
+                    "model_converter": False}
+        #logging.info("COLMAP reconstruction:")
         colmap_client = DockerizedColmap(RAW_DATA_DIR, MASKED_DATA_DIR, COLMAP_OUTPUT_DIR, "colmap/colmap:latest")
-        colmap_client.reconstruct(**colmap_kargs)
+        #colmap_client.reconstruct(**colmap_kargs)
 
         # poses extraction (4)
-        Poses(COLMAP_OUTPUT_DIR, MASKED_DATA_DIR).run()
+        # Poses(COLMAP_OUTPUT_DIR, MASKED_DATA_DIR).run()
+
+        # Poisson and inlier filtering (5)
+        #check_output('cp {} {}'.format(os.path.join(COLMAP_OUTPUT_DIR, "dense.ply"), SUPP_OUTPUT_DIR), shell=True)
+        #PcdOps(SUPP_OUTPUT_DIR, args.costume).reconstruct(outliers=True, poisson=True)
+
+        # volume - basic features (6)
+        PcdOps(SUPP_OUTPUT_DIR, args.costume).compute_volume()
 
 
 if __name__ == '__main__':

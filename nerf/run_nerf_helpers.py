@@ -55,6 +55,11 @@ class Embedder:
         self.out_dim = out_dim
 
     def embed(self, inputs):
+        '''
+            r_o --> embedding output size: input_dims x (2xmultires+1) = 60+3,
+            r_d --> embedding output size: input_dims x (2xmultires_view+1) = 24+3,
+            total -->input_dims x (2x (2xmultires+multires_view)+1) = 90
+        '''
         return tf.concat([fn(inputs) for fn in self.embed_fns], -1)
 
 
